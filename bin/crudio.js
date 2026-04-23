@@ -52,6 +52,8 @@ async function main() {
     specPath: config.specPath,
     dataDir: config.dataDir,
     resources: config.resources,
+    seed: config.seed,
+    seedPerResource: config.seedPerResource,
   });
 
   app.listen(config.port, () => {

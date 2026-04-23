@@ -121,3 +121,24 @@ describe('CRUD routes integration', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('seeding', () => {
+  it('seeds data when seed option is provided', async () => {
+    const { mkdirSync, rmSync } = await import('node:fs');
+    const TEST_DIR = join(import.meta.dirname, '..', 'tmp-seed-integration');
+    rmSync(TEST_DIR, { recursive: true, force: true });
+    mkdirSync(TEST_DIR, { recursive: true });
+    const seededApp = await createApp({
+      specPath: join(FIXTURES, 'petstore.yaml'),
+      dataDir: TEST_DIR,
+      resources: {},
+      seed: 5,
+    });
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(seededApp).get('/pets');
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(5);
+    expect(res.body.total).toBe(5);
+    rmSync(TEST_DIR, { recursive: true, force: true });
+  });
+});

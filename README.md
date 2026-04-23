@@ -121,6 +121,13 @@ Usage: crudio <spec-file> [options]
 - [Configuration](docs/configuration.md) — config file, resource overrides, seeding options
 - [Development](docs/development.md) — project structure, running tests, architecture
 
+## Ecosystem
+
+Crudio pairs well with [AquaSDK](https://github.com/enricodeleo/aquasdk), a JavaScript SDK generator for OpenAPI specs.
+
+- **Crudio**: run the backend from the spec
+- **AquaSDK**: generate the client from the same spec
+
 ## License
 
 MIT

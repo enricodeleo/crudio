@@ -1,9 +1,15 @@
 import Ajv from 'ajv';
 
 export function createValidators(schema) {
-  const ajv = new Ajv({ allErrors: true });
+  const ajv = new Ajv({ allErrors: true, strict: false });
 
   const bodyValidator = ajv.compile(schema);
+
+  const createSchema = {
+    ...schema,
+    required: (schema.required ?? []).filter((r) => r !== 'id'),
+  };
+  const createValidator = ajv.compile(createSchema);
 
   const patchSchema = {
     ...schema,
@@ -14,6 +20,11 @@ export function createValidators(schema) {
   function validateBody(data) {
     const valid = bodyValidator(data);
     return { valid, errors: valid ? [] : bodyValidator.errors };
+  }
+
+  function validateCreate(data) {
+    const valid = createValidator(data);
+    return { valid, errors: valid ? [] : createValidator.errors };
   }
 
   function validatePatch(data) {
@@ -34,5 +45,5 @@ export function createValidators(schema) {
     return { limit, offset, filters };
   }
 
-  return { validateBody, validatePatch, parseQuery };
+  return { validateBody, validateCreate, validatePatch, parseQuery };
 }

@@ -1,7 +1,12 @@
 {
   "name": "crudio",
   "version": "0.1.0",
-  "description": "Turn an OpenAPI spec into a working CRUD backend",
+  "description": "Turn an OpenAPI spec into a working CRUD backend with persistence and seeding",
+  "author": "Enrico De Leo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enricodeleo/crudio.git"
+  },
   "type": "module",
   "bin": {
     "crudio": "./bin/crudio.js"

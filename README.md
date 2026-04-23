@@ -12,17 +12,22 @@
 
 ## What is Crudio?
 
-Crudio reads an OpenAPI 3.x specification and spins up a real CRUD API — validated, persistent, derived entirely from your schema.
+Crudio reads an OpenAPI 3.x specification and spins up a working CRUD API — validated, persistent, derived entirely from your schema. Think of it as a mock server with real state, real validation, and real persistence.
 
 ## Why
 
-Mock servers are useful, but they usually stop at returning fake responses.
+Mock servers return canned responses. That's fine for smoke tests, but not enough when you need to verify that your frontend actually handles pagination, validation errors, 404s, and partial updates correctly.
 
-Crudio is for cases where you need something closer to a real backend: validated requests, persistent state, and actual CRUD behavior derived from an OpenAPI contract.
+Crudio gives you a backend that behaves like a real one — because it derives everything from your API contract:
 
-**It is:** contract-first, stateful, validated, predictable.
+- requests are validated against your schema
+- data persists across calls (JSON files, no database needed)
+- IDs are generated based on your spec (integers, UUIDs, etc.)
+- CRUD operations work exactly as defined in the OpenAPI document
 
-**It is not:** a mock server with static responses, a backend framework, or a replacement for business logic.
+**Use it for:** integration testing, frontend development, API prototyping, contract verification.
+
+**Don't use it for:** production backends, load testing, or anything that needs business logic beyond CRUD.
 
 ## Quick Start
 

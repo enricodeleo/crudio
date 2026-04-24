@@ -1,11 +1,15 @@
 {
   "name": "crudio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn an OpenAPI spec into a working CRUD backend with persistence and seeding",
   "author": "Enrico De Leo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/enricodeleo/crudio.git"
+  },
+  "homepage": "https://github.com/enricodeleo/crudio#readme",
+  "bugs": {
+    "url": "https://github.com/enricodeleo/crudio/issues"
   },
   "type": "module",
   "bin": {
@@ -14,10 +18,18 @@
   "exports": {
     ".": "./src/app.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node bin/crudio.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "openapi",

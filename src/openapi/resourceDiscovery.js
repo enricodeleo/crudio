@@ -29,6 +29,10 @@ function extractIdParam(pathStr) {
   return match ? match[2] : null;
 }
 
+function deriveResourceName(collectionPath) {
+  return collectionPath.replace(/^\//, '').replace(/\//g, '-');
+}
+
 export function discoverResources(spec, resourceConfig = {}) {
   const paths = spec.paths ?? {};
   const resources = [];
@@ -53,11 +57,19 @@ export function discoverResources(spec, resourceConfig = {}) {
     }
   }
 
+  const nameToPath = new Map();
   for (const [collectionPath, { collectionOps, itemPath, itemOps }] of candidates) {
     if (!collectionOps || !itemPath || !itemOps) continue;
 
-    const segments = collectionPath.split('/');
-    const name = segments[segments.length - 1];
+    const name = deriveResourceName(collectionPath);
+    const existing = nameToPath.get(name);
+    if (existing && existing !== collectionPath) {
+      throw new Error(
+        `Resource name collision: "${existing}" and "${collectionPath}" both derive to "${name}". ` +
+          `Override one via the "resources" config to disambiguate.`
+      );
+    }
+    nameToPath.set(name, collectionPath);
     const idParam = extractIdParam(itemPath);
 
     const config = resourceConfig[name];

@@ -59,7 +59,7 @@ describe('resourceDiscovery', () => {
     expect(resources).toHaveLength(0);
   });
 
-  it('derives resource name from last path segment', () => {
+  it('derives resource name from the full collection path', () => {
     const spec = {
       openapi: '3.0.3',
       info: { title: 'Test', version: '1.0' },
@@ -89,9 +89,67 @@ describe('resourceDiscovery', () => {
     };
     const resources = discoverResources(spec);
     expect(resources).toHaveLength(1);
-    expect(resources[0].name).toBe('products');
+    expect(resources[0].name).toBe('api-v1-products');
     expect(resources[0].collectionPath).toBe('/api/v1/products');
     expect(resources[0].itemPath).toBe('/api/v1/products/{productId}');
+  });
+
+  it('disambiguates resources that share a last segment', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/files': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/files/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+        '/logs/files': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/logs/files/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    };
+    const resources = discoverResources(spec);
+    const names = resources.map((r) => r.name).sort();
+    expect(names).toEqual(['files', 'logs-files']);
+  });
+
+  it('throws a clear error when two paths collide on the derived name', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/a-b': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/a-b/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+        '/a/b': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/a/b/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    };
+    expect(() => discoverResources(spec)).toThrow(/Resource name collision.*"a-b"/);
   });
 
   it('applies config overrides to exclude resources', () => {

@@ -3,6 +3,7 @@ import { normalize } from './schemaResolver.js';
 const ITEM_PATH_RE = /^\/(.+)\/\{([^}]+)\}$/;
 
 function extractSchema(operation, direction) {
+  if (!operation) return null;
   if (direction === 'request') {
     const content = operation.requestBody?.content?.['application/json'];
     return content?.schema ?? null;

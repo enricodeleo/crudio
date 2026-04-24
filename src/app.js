@@ -7,7 +7,7 @@ import { createValidators } from './http/validators.js';
 import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
 import { JsonFileAdapter } from './storage/jsonFileAdapter.js';
-import { seedResource } from './seed/seedEngine.js';
+import { seedAll } from './seed/seedEngine.js';
 
 export async function createApp({ specPath, dataDir, resources: resourceConfig, seed, seedPerResource }) {
   const spec = await loadSpec(specPath);
@@ -33,12 +33,14 @@ export async function createApp({ specPath, dataDir, resources: resourceConfig, 
   }
 
   if (seed) {
-    for (const resource of discovered) {
-      const count = seedPerResource?.[resource.name] ?? seed;
-      const engine = engines.get(resource.name).engine;
-      const normalizedSchema = normalize(resource.schema, resource.name);
-      await seedResource(engine, normalizedSchema, count);
-    }
+    const normalizedResources = discovered.map((r) => ({
+      ...r,
+      schema: normalize(r.schema, r.name),
+    }));
+    const engineMap = new Map(
+      discovered.map((r) => [r.name, engines.get(r.name).engine])
+    );
+    await seedAll(normalizedResources, engineMap, seed, seedPerResource);
   }
 
   const routes = buildRoutes(discovered);

@@ -5,10 +5,11 @@ function toKebab(s) {
 }
 
 function italianPlurals(stem) {
-  const out = [];
-  if (stem.endsWith('o') || stem.endsWith('e')) out.push(stem.slice(0, -1) + 'i');
-  if (stem.endsWith('a')) out.push(stem.slice(0, -1) + 'e');
-  return out;
+  const out = new Set();
+  if (stem.endsWith('io')) out.add(stem.slice(0, -1));
+  else if (stem.endsWith('o') || stem.endsWith('e')) out.add(stem.slice(0, -1) + 'i');
+  if (stem.endsWith('a')) out.add(stem.slice(0, -1) + 'e');
+  return [...out];
 }
 
 export function resolveFK(propName, propSchema, resourceNames) {

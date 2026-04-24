@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 
-export function generateFake(schema, isRequired = true) {
+export function generateFake(schema, isRequired = true, ctx = null) {
   if (!schema) return null;
 
   if (!isRequired && Math.random() < 0.5) return undefined;
@@ -19,9 +19,9 @@ export function generateFake(schema, isRequired = true) {
     case 'boolean':
       return faker.datatype.boolean();
     case 'array':
-      return generateFakeArray(schema);
+      return generateFakeArray(schema, ctx);
     case 'object':
-      return generateFakeObject(schema);
+      return generateFakeObject(schema, ctx);
     default:
       return null;
   }
@@ -35,23 +35,36 @@ function generateFakeString(schema) {
   return faker.lorem.word();
 }
 
-function generateFakeArray(schema) {
+function generateFakeArray(schema, ctx) {
   const count = faker.number.int({ min: 1, max: 3 });
   const items = [];
   for (let i = 0; i < count; i++) {
-    const value = generateFake(schema.items, true);
+    const value = generateFake(schema.items, true, ctx);
     if (value !== null) items.push(value);
   }
   return items;
 }
 
-function generateFakeObject(schema) {
+function generateFakeObject(schema, ctx) {
   const obj = {};
   const required = schema.required ?? [];
 
   for (const [key, propSchema] of Object.entries(schema.properties ?? {})) {
+    if (ctx?.resolveFK) {
+      const fk = ctx.resolveFK(key, propSchema);
+      if (fk) {
+        const val = fk.isArray
+          ? ctx.sampleIds(fk.target, faker.number.int({ min: 1, max: 3 }))
+          : ctx.sampleId(fk.target);
+        if (val !== null && !(Array.isArray(val) && val.length === 0)) {
+          obj[key] = val;
+          continue;
+        }
+      }
+    }
+
     const isReq = required.includes(key);
-    const value = generateFake(propSchema, isReq);
+    const value = generateFake(propSchema, isReq, ctx);
     if (value !== undefined) obj[key] = value;
   }
 

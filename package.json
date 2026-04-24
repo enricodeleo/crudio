@@ -13,7 +13,7 @@
   },
   "type": "module",
   "bin": {
-    "crudio": "./bin/crudio.js"
+    "crudio": "bin/crudio.js"
   },
   "exports": {
     ".": "./src/app.js"

@@ -1,8 +1,8 @@
 {
-  "name": "crudio",
-  "version": "0.2.0",
+  "name": "@enricodeleo/crudio",
+  "version": "0.2.1",
   "description": "Turn an OpenAPI spec into a working CRUD backend with persistence and seeding",
-  "author": "Enrico De Leo",
+  "author": "Enrico Deleo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/enricodeleo/crudio.git"

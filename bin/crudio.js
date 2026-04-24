@@ -56,11 +56,25 @@ async function main() {
     seedPerResource: config.seedPerResource,
   });
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`Crudio running on port ${config.port}`);
     console.log(`Spec: ${config.specPath}`);
     console.log(`Data: ${config.dataDir}`);
   });
+
+  const shutdown = (reason) => {
+    if (reason) console.log(`\n${reason}. Shutting down.`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2000).unref();
+  };
+
+  process.on('SIGINT', () => shutdown('Received SIGINT'));
+  process.on('SIGTERM', () => shutdown('Received SIGTERM'));
+
+  const parentPid = process.ppid;
+  setInterval(() => {
+    if (process.ppid !== parentPid) shutdown('Parent process exited');
+  }, 1000).unref();
 }
 
 main().catch((err) => {

@@ -66,11 +66,15 @@ export function discoverResources(spec, resourceConfig = {}) {
     const methods = extractMethods(collectionOps, itemOps);
     const finalMethods = config?.methods ?? methods;
 
-    const schema =
+    let schema =
       normalize(extractSchema(itemOps.get, 'response'), name) ??
       normalize(extractSchema(collectionOps.get, 'response'), name) ??
       normalize(extractSchema(collectionOps.post, 'request'), name) ??
       { type: 'object', properties: {} };
+
+    if (schema.type === 'array' && schema.items) {
+      schema = normalize(schema.items, name) ?? schema;
+    }
 
     const itemPathParams = itemOps.get?.parameters ?? itemOps.delete?.parameters ?? [];
     const idParamObj = itemPathParams.find((p) => p.name === idParam);

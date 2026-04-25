@@ -39,6 +39,72 @@ describe('inferResources', () => {
     expect(pets.idSchema).toEqual({ type: 'integer' });
   });
 
+  it('uses canonical response metadata to extract resource schema', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/reports': {
+          get: {
+            operationId: 'listReports',
+            responses: {
+              '202': {
+                description: 'accepted',
+                content: {
+                  'text/plain': {
+                    schema: { type: 'string' },
+                  },
+                },
+              },
+              '203': {
+                description: 'structured',
+                content: {
+                  'application/merge-patch+json': {
+                    schema: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string' },
+                          status: { type: 'string' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        '/reports/{reportId}': {
+          delete: {
+            operationId: 'deleteReport',
+            parameters: [
+              { name: 'reportId', in: 'path', required: true, schema: { type: 'string' } },
+            ],
+            responses: {
+              '204': { description: 'deleted' },
+            },
+          },
+        },
+      },
+    };
+
+    expect(inferResources(compile(spec))).toMatchObject([
+      {
+        name: 'reports',
+        schema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            status: { type: 'string' },
+          },
+        },
+        methods: ['list', 'delete'],
+      },
+    ]);
+  });
+
   it('skips paths without a matching collection and item pair', () => {
     const spec = {
       openapi: '3.0.3',
@@ -53,7 +119,7 @@ describe('inferResources', () => {
       },
     };
 
-    expect(inferResources(compile(spec), {})).toEqual([]);
+    expect(inferResources(compile(spec))).toEqual([]);
   });
 
   it('derives the resource name from the full collection path', () => {
@@ -77,7 +143,7 @@ describe('inferResources', () => {
       },
     };
 
-    expect(inferResources(compile(spec), {})).toMatchObject([
+    expect(inferResources(compile(spec))).toMatchObject([
       {
         name: 'api-v1-products',
         collectionPath: '/api/v1/products',
@@ -126,7 +192,7 @@ describe('inferResources', () => {
       },
     };
 
-    expect(inferResources(compile(spec), {})).toMatchObject([
+    expect(inferResources(compile(spec))).toMatchObject([
       {
         name: 'items',
         collectionPath: '/items',
@@ -178,6 +244,6 @@ describe('inferResources', () => {
       },
     };
 
-    expect(() => inferResources(compile(spec), {})).toThrow(/Resource name collision.*"a-b"/);
+    expect(() => inferResources(compile(spec))).toThrow(/Resource name collision.*"a-b"/);
   });
 });

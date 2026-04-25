@@ -41,20 +41,24 @@ function normalizeResourceSchema(schema, resourceName) {
   return normalized;
 }
 
-function extractResourceSchema(byKey, collectionPath, itemPath, resourceName) {
+function extractCanonicalResponseSchema(operation) {
+  const status = operation?.canonicalResponse?.status;
+  const contentType = operation?.canonicalResponse?.contentType;
+
+  if (!status || !contentType) return null;
+
+  return operation.operation.responses?.[String(status)]?.content?.[contentType]?.schema ?? null;
+}
+
+function extractResourceSchema(byKey, itemPath, resourceName) {
   return normalizeResourceSchema(
-    getOperation(byKey, 'GET', itemPath)?.canonicalResponse?.contentType === 'application/json'
-      ? getOperation(byKey, 'GET', itemPath)?.operation.responses?.['200']?.content?.['application/json']?.schema
-      : null,
+    extractCanonicalResponseSchema(getOperation(byKey, 'GET', itemPath)),
     resourceName
   );
 }
 
 function extractFallbackSchema(byKey, collectionPath, resourceName) {
-  const listSchema =
-    getOperation(byKey, 'GET', collectionPath)?.canonicalResponse?.contentType === 'application/json'
-      ? getOperation(byKey, 'GET', collectionPath)?.operation.responses?.['200']?.content?.['application/json']?.schema
-      : null;
+  const listSchema = extractCanonicalResponseSchema(getOperation(byKey, 'GET', collectionPath));
   if (listSchema) {
     return normalizeResourceSchema(listSchema, resourceName);
   }
@@ -87,7 +91,7 @@ function buildResourceFromPair(collectionPath, itemPath, byKey) {
   const name = deriveResourceName(collectionPath);
 
   const schema =
-    extractResourceSchema(byKey, collectionPath, itemPath, name) ??
+    extractResourceSchema(byKey, itemPath, name) ??
     extractFallbackSchema(byKey, collectionPath, name);
 
   return {
@@ -101,7 +105,7 @@ function buildResourceFromPair(collectionPath, itemPath, byKey) {
   };
 }
 
-export function inferResources(operations, resourceConfig = {}) {
+export function inferResources(operations) {
   const byKey = new Map(operations.map((operation) => [operation.key, operation]));
   const resources = [];
   const nameToPath = new Map();
@@ -119,7 +123,7 @@ export function inferResources(operations, resourceConfig = {}) {
 
     if (!itemCandidate) continue;
 
-    const resource = buildResourceFromPair(openApiPath, itemCandidate.openApiPath, byKey, resourceConfig);
+    const resource = buildResourceFromPair(openApiPath, itemCandidate.openApiPath, byKey);
     const existing = nameToPath.get(resource.name);
 
     if (existing && existing !== resource.collectionPath) {

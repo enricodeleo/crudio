@@ -6,3 +6,5 @@ test/tmp-engine/
 .wolf/
 .codegraph/
 CLAUDE.md
+AGENTS.md
+docs/superpowers/

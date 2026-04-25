@@ -17,4 +17,65 @@ describe('resourceDiscovery smoke', () => {
       idParam: 'petId',
     });
   });
+
+  it('still derives full-path names to disambiguate shared last segments', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/files': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/files/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+        '/logs/files': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/logs/files/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    };
+
+    expect(discoverResources(spec).map((resource) => resource.name).sort()).toEqual([
+      'files',
+      'logs-files',
+    ]);
+  });
+
+  it('still throws on derived-name collisions that would break current app boot', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/a-b': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/a-b/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+        '/a/b': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/a/b/{id}': {
+          get: {
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    };
+
+    expect(() => discoverResources(spec)).toThrow(/Resource name collision.*"a-b"/);
+  });
 });

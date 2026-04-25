@@ -14,7 +14,7 @@ describe('inferResources', () => {
   it('infers pets as a CRUD resource from compiled operations', async () => {
     const spec = await loadSpec(join(FIXTURES, 'petstore.yaml'));
     const operations = compileOperations(spec);
-    const resources = inferResources(operations, {});
+    const resources = inferResources(operations);
 
     expect(resources.find((resource) => resource.name === 'pets')).toMatchObject({
       name: 'pets',
@@ -27,7 +27,7 @@ describe('inferResources', () => {
 
   it('extracts schema and id schema from compiled operations', async () => {
     const spec = await loadSpec(join(FIXTURES, 'petstore.yaml'));
-    const resources = inferResources(compileOperations(spec), {});
+    const resources = inferResources(compileOperations(spec));
     const pets = resources.find((resource) => resource.name === 'pets');
 
     expect(pets.schema.type).toBe('object');

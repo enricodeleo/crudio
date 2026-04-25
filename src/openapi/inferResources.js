@@ -1,0 +1,126 @@
+import { normalize } from './schemaResolver.js';
+
+function deriveResourceName(collectionPath) {
+  return collectionPath.replace(/^\//, '').replace(/\//g, '-');
+}
+
+function getOperation(byKey, method, openApiPath) {
+  return byKey.get(`${method} ${openApiPath}`) ?? null;
+}
+
+function extractMethods(byKey, collectionPath, itemPath) {
+  const methods = [];
+
+  if (getOperation(byKey, 'GET', collectionPath)) methods.push('list');
+  if (getOperation(byKey, 'POST', collectionPath)) methods.push('create');
+  if (getOperation(byKey, 'GET', itemPath)) methods.push('getById');
+  if (getOperation(byKey, 'PUT', itemPath)) methods.push('update');
+  if (getOperation(byKey, 'PATCH', itemPath)) methods.push('patch');
+  if (getOperation(byKey, 'DELETE', itemPath)) methods.push('delete');
+
+  return methods;
+}
+
+function normalizeResourceSchema(schema, resourceName) {
+  if (!schema) return null;
+
+  let normalized = normalize(schema, resourceName) ?? { type: 'object', properties: {} };
+
+  if (normalized.type === 'array' && normalized.items) {
+    normalized = normalize(normalized.items, resourceName) ?? normalized;
+  }
+
+  return normalized;
+}
+
+function extractResourceSchema(byKey, collectionPath, itemPath, resourceName) {
+  return normalizeResourceSchema(
+    getOperation(byKey, 'GET', itemPath)?.canonicalResponse?.contentType === 'application/json'
+      ? getOperation(byKey, 'GET', itemPath)?.operation.responses?.['200']?.content?.['application/json']?.schema
+      : null,
+    resourceName
+  );
+}
+
+function extractFallbackSchema(byKey, collectionPath, resourceName) {
+  const listSchema =
+    getOperation(byKey, 'GET', collectionPath)?.canonicalResponse?.contentType === 'application/json'
+      ? getOperation(byKey, 'GET', collectionPath)?.operation.responses?.['200']?.content?.['application/json']?.schema
+      : null;
+  if (listSchema) {
+    return normalizeResourceSchema(listSchema, resourceName);
+  }
+
+  const createSchema = getOperation(byKey, 'POST', collectionPath)?.requestBodySchema ?? null;
+  return normalizeResourceSchema(createSchema, resourceName) ?? { type: 'object', properties: {} };
+}
+
+function extractIdSchema(byKey, itemPath, idParam) {
+  const itemOperation =
+    getOperation(byKey, 'GET', itemPath) ??
+    getOperation(byKey, 'DELETE', itemPath) ??
+    getOperation(byKey, 'PUT', itemPath) ??
+    getOperation(byKey, 'PATCH', itemPath);
+
+  return (
+    itemOperation?.operation.parameters?.find(
+      (parameter) => parameter.in === 'path' && parameter.name === idParam
+    )?.schema ?? null
+  );
+}
+
+function buildResourceFromPair(collectionOperation, itemOperation, byKey) {
+  const collectionPath = collectionOperation.openApiPath;
+  const itemPath = itemOperation.openApiPath;
+  const idParam = itemOperation.pathParams[0] ?? null;
+  const name = deriveResourceName(collectionPath);
+
+  const schema =
+    extractResourceSchema(byKey, collectionPath, itemPath, name) ??
+    extractFallbackSchema(byKey, collectionPath, name);
+
+  return {
+    name,
+    collectionPath,
+    itemPath,
+    idParam,
+    idSchema: extractIdSchema(byKey, itemPath, idParam),
+    schema,
+    methods: extractMethods(byKey, collectionPath, itemPath),
+  };
+}
+
+export function inferResources(operations, resourceConfig = {}) {
+  const byKey = new Map(operations.map((operation) => [operation.key, operation]));
+  const resources = [];
+  const nameToPath = new Map();
+
+  for (const operation of operations) {
+    if (operation.method !== 'GET' || operation.pathParams.length !== 0) continue;
+
+    const itemCandidate = operations.find(
+      (candidate) =>
+        candidate.method === 'GET' &&
+        candidate.pathParams.length === 1 &&
+        candidate.openApiPath.startsWith(`${operation.openApiPath}/{`) &&
+        candidate.openApiPath.split('/').length === operation.openApiPath.split('/').length + 1
+    );
+
+    if (!itemCandidate) continue;
+
+    const resource = buildResourceFromPair(operation, itemCandidate, byKey, resourceConfig);
+    const existing = nameToPath.get(resource.name);
+
+    if (existing && existing !== resource.collectionPath) {
+      throw new Error(
+        `Resource name collision: "${existing}" and "${resource.collectionPath}" both derive to "${resource.name}". ` +
+          `Update the collection paths to disambiguate them.`
+      );
+    }
+
+    nameToPath.set(resource.name, resource.collectionPath);
+    resources.push(resource);
+  }
+
+  return resources;
+}

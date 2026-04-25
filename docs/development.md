@@ -37,17 +37,18 @@ crudio/
 │   ├── config.js              # Config loader
 │   ├── openapi/
 │   │   ├── loadSpec.js        # OpenAPI loading + dereferencing
+│   │   ├── compileOperations.js # Normalized method + path compilation
+│   │   ├── inferResources.js  # CRUD resource inference from operations
 │   │   ├── schemaResolver.js  # Schema normalization (allOf, rejects oneOf)
-│   │   ├── resourceDiscovery.js # CRUD resource detection from paths
-│   │   └── resourceRegistry.js  # Resource storage
 │   ├── engine/
 │   │   ├── crudEngine.js      # Pure CRUD logic (no HTTP)
 │   │   └── idStrategy.js      # Schema-driven ID generation
 │   ├── storage/
 │   │   ├── adapter.js         # Storage interface
-│   │   └── jsonFileAdapter.js # JSON file persistence
+│   │   └── jsonStateStore.js  # JSON resource + metadata persistence
 │   ├── http/
-│   │   ├── routeBuilder.js    # Express route registration
+│   │   ├── buildOperationRegistry.js # CRUD operation route registry
+│   │   ├── createOperationHandler.js # Request handlers from compiled operations
 │   │   ├── validators.js      # AJV validation
 │   │   └── errors.js          # Error classes
 │   └── seed/
@@ -66,13 +67,13 @@ crudio/
 
 Each module has a single responsibility and no cross-cutting dependencies:
 
-- **`openapi/`** — spec loading, schema resolution, resource discovery
+- **`openapi/`** — spec loading, schema resolution, operation compilation, CRUD inference
 - **`engine/`** — pure CRUD logic with no HTTP awareness
-- **`storage/`** — persistence interface and JSON file adapter
-- **`http/`** — Express routing, validation, error handling
+- **`storage/`** — persistence interface and namespaced JSON state storage
+- **`http/`** — operation registry, request handlers, validation, error handling
 - **`seed/`** — fake data generation and seeding
 
-The `CrudEngine` never touches HTTP or Express. The `RouteBuilder` never touches storage. Data flows through well-defined interfaces.
+The `CrudEngine` never touches HTTP or Express. `compileOperations()` is the app bootstrap source of truth, and `inferResources()` derives the CRUD-backed resources from that operation list. Data flows through well-defined interfaces.
 
 ## Adding a Storage Adapter
 
@@ -85,8 +86,9 @@ class StorageAdapter {
   async insert(resource, data) {}
   async update(resource, id, data) {}
   async delete(resource, id) {}
-  async count(resource) {}
+  async count(resource, query) {}
+  async writeRegistry(registry) {}
 }
 ```
 
-Then pass your adapter to `CrudEngine` instead of `JsonFileAdapter`.
+Then pass your adapter to `CrudEngine` instead of `JsonStateStore`.

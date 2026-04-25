@@ -36,6 +36,7 @@ async function main() {
     specPath: config.specPath,
     dataDir: config.dataDir,
     resources: config.resources,
+    operations: config.operations,
     seed: config.seed.count,
     seedPerResource: toLegacySeedPerResource(config.resources),
   });

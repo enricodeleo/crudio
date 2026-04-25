@@ -53,6 +53,12 @@ describe('CRUD routes integration', () => {
     expect(res.body.total).toBe(2);
   });
 
+  it('keeps the petstore CRUD flow green through the operation-first app', async () => {
+    await request('POST', '/pets', { name: 'Rex' });
+    expect((await request('GET', '/pets')).body.total).toBe(1);
+    expect((await request('GET', '/pets/1')).status).toBe(200);
+  });
+
   it('GET /pets/:petId returns a single pet', async () => {
     await request('POST', '/pets', { name: 'Rex' });
     const res = await request('GET', '/pets/1');
@@ -118,6 +124,18 @@ describe('CRUD routes integration', () => {
 
   it('returns 404 for non-CRUD paths', async () => {
     const res = await request('GET', '/nonexistent');
+    expect(res.status).toBe(404);
+  });
+
+  it('can disable one CRUD operation via operations.<key>.enabled = false', async () => {
+    const disabledApp = await createApp({
+      specPath: join(FIXTURES, 'petstore.yaml'),
+      dataDir: TEST_DIR,
+      resources: {},
+      operations: { createPet: { enabled: false } },
+    });
+    const { default: supertest } = await import('supertest');
+    const res = await supertest(disabledApp).post('/pets').send({ name: 'Rex' });
     expect(res.status).toBe(404);
   });
 });

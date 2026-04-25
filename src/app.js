@@ -1,24 +1,43 @@
 import express from 'express';
 import { loadSpec } from './openapi/loadSpec.js';
-import { discoverResources } from './openapi/resourceDiscovery.js';
+import { compileOperations } from './openapi/compileOperations.js';
+import { inferResources } from './openapi/inferResources.js';
 import { normalize } from './openapi/schemaResolver.js';
-import { buildRoutes } from './http/routeBuilder.js';
+import { buildOperationRegistry } from './http/buildOperationRegistry.js';
+import { createOperationHandler } from './http/createOperationHandler.js';
 import { createValidators } from './http/validators.js';
 import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
 import { JsonStateStore } from './storage/jsonStateStore.js';
 import { seedAll } from './seed/seedEngine.js';
 
-export async function createApp({ specPath, dataDir, resources: resourceConfig, seed, seedPerResource }) {
+export async function createApp({
+  specPath,
+  dataDir,
+  resources: resourceConfig,
+  operations: operationConfig = {},
+  seed,
+  seedPerResource,
+}) {
   const effectiveResourceConfig = mergeResourceConfig(resourceConfig, seedPerResource);
   const spec = await loadSpec(specPath);
-  const discovered = discoverResources(spec, effectiveResourceConfig);
+  const operations = compileOperations(spec);
+  const inferredResources = inferResources(operations);
   const storage = new JsonStateStore(dataDir);
+
+  await storage.writeRegistry({
+    operations: operations.map(({ key, method, openApiPath, operationId }) => ({
+      key,
+      method,
+      openApiPath,
+      operationId,
+    })),
+  });
 
   const engines = new Map();
   const validators = new Map();
 
-  for (const resource of discovered) {
+  for (const resource of inferredResources) {
     const normalizedSchema = normalize(resource.schema, resource.name);
     const idSchema = resource.idSchema ?? null;
 
@@ -34,31 +53,35 @@ export async function createApp({ specPath, dataDir, resources: resourceConfig, 
   }
 
   if (shouldSeed(seed, effectiveResourceConfig)) {
-    const normalizedResources = discovered.map((r) => ({
+    const normalizedResources = inferredResources.map((r) => ({
       ...r,
       schema: normalize(r.schema, r.name),
     }));
     const engineMap = new Map(
-      discovered.map((r) => [r.name, engines.get(r.name).engine])
+      inferredResources.map((r) => [r.name, engines.get(r.name).engine])
     );
     await seedAll(normalizedResources, engineMap, { count: seed }, effectiveResourceConfig);
   }
 
-  const routes = buildRoutes(discovered);
+  const routes = buildOperationRegistry(operations, inferredResources, operationConfig);
   const app = express();
 
   app.use(express.json());
 
   app.get('/_crudio/health', (req, res) => {
-    res.json({ status: 'ok', resources: discovered.map((r) => r.name) });
+    res.json({ status: 'ok', resources: inferredResources.map((r) => r.name) });
   });
 
   for (const route of routes) {
-    const { engine, resource } = engines.get(route.resourceName);
-    const v = validators.get(route.resourceName);
-    const idParam = resource.idParam;
-
-    const handler = createHandler(route.operation, engine, v, idParam, route.resourceName);
+    const { engine } = engines.get(route.resource.name);
+    const v = validators.get(route.resource.name);
+    const handler = createOperationHandler({
+      operation: route.operation,
+      crudOperation: route.crudOperation,
+      resource: route.resource,
+      engine,
+      validators: v,
+    });
     app[route.method.toLowerCase()](route.path, handler);
   }
 
@@ -96,88 +119,4 @@ function mergeResourceConfig(resourceConfig = {}, seedPerResource = {}) {
 function shouldSeed(seed, resourceConfig = {}) {
   if (seed !== undefined) return true;
   return Object.values(resourceConfig).some((config) => config?.seed?.count !== undefined);
-}
-
-function createHandler(operation, engine, validators, idParam, resourceName) {
-  switch (operation) {
-    case 'list':
-      return async (req, res, next) => {
-        try {
-          const query = validators.parseQuery(req.query);
-          const result = await engine.list(query);
-          res.json(result);
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    case 'getById':
-      return async (req, res, next) => {
-        try {
-          const item = await engine.getById(req.params[idParam]);
-          if (!item) return res.status(404).json({ error: `Resource ${resourceName} with id ${req.params[idParam]} not found` });
-          res.json(item);
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    case 'create':
-      return async (req, res, next) => {
-        try {
-          const validation = validators.validateCreate(req.body);
-          if (!validation.valid) {
-            return res.status(400).json({ error: 'Validation failed', details: validation.errors });
-          }
-          const item = await engine.create(req.body);
-          res.status(201).json(item);
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    case 'update':
-      return async (req, res, next) => {
-        try {
-          const validation = validators.validateBody(req.body);
-          if (!validation.valid) {
-            return res.status(400).json({ error: 'Validation failed', details: validation.errors });
-          }
-          const item = await engine.update(req.params[idParam], req.body);
-          if (!item) return res.status(404).json({ error: `Resource ${resourceName} with id ${req.params[idParam]} not found` });
-          res.json(item);
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    case 'patch':
-      return async (req, res, next) => {
-        try {
-          const validation = validators.validatePatch(req.body);
-          if (!validation.valid) {
-            return res.status(400).json({ error: 'Validation failed', details: validation.errors });
-          }
-          const item = await engine.patch(req.params[idParam], req.body);
-          if (!item) return res.status(404).json({ error: `Resource ${resourceName} with id ${req.params[idParam]} not found` });
-          res.json(item);
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    case 'delete':
-      return async (req, res, next) => {
-        try {
-          const deleted = await engine.delete(req.params[idParam]);
-          if (!deleted) return res.status(404).json({ error: `Resource ${resourceName} with id ${req.params[idParam]} not found` });
-          res.status(204).end();
-        } catch (err) {
-          next(err);
-        }
-      };
-
-    default:
-      return (req, res) => res.status(405).json({ error: 'Method not allowed' });
-  }
 }

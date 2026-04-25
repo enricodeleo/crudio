@@ -1,11 +1,65 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CrudEngine } from '../../src/engine/crudEngine.js';
 import { IdStrategy } from '../../src/engine/idStrategy.js';
-import { JsonFileAdapter } from '../../src/storage/jsonFileAdapter.js';
+import { JsonStateStore } from '../../src/storage/jsonStateStore.js';
 import { join } from 'node:path';
 import { mkdirSync, rmSync } from 'node:fs';
 
 const TEST_DIR = join(import.meta.dirname, '..', 'tmp-engine');
+
+class LegacyCountAdapter {
+  constructor(items = []) {
+    this.items = items;
+  }
+
+  async findAll(_resource, query = {}) {
+    let items = [...this.items];
+    if (query.filters) {
+      for (const [key, value] of Object.entries(query.filters)) {
+        items = items.filter((item) => item[key] === value);
+      }
+    }
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? items.length;
+    return items.slice(offset, offset + limit);
+  }
+
+  async findById(_resource, id) {
+    return this.items.find((item) => String(item.id) === String(id)) ?? null;
+  }
+
+  async insert(_resource, item) {
+    this.items.push(item);
+    return item;
+  }
+
+  async update(_resource, id, item) {
+    const index = this.items.findIndex((existing) => String(existing.id) === String(id));
+    if (index === -1) return null;
+    this.items[index] = item;
+    return item;
+  }
+
+  async delete(_resource, id) {
+    const index = this.items.findIndex((existing) => String(existing.id) === String(id));
+    if (index === -1) return false;
+    this.items.splice(index, 1);
+    return true;
+  }
+
+  async count() {
+    return this.items.length;
+  }
+}
+
+class StrictLegacyCountAdapter extends LegacyCountAdapter {
+  async count(resource) {
+    if (arguments.length !== 1) {
+      throw new Error(`count expected 1 argument, got ${arguments.length}`);
+    }
+    return super.count(resource);
+  }
+}
 
 describe('CrudEngine', () => {
   let engine;
@@ -26,7 +80,7 @@ describe('CrudEngine', () => {
   beforeEach(() => {
     rmSync(TEST_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DIR, { recursive: true });
-    storage = new JsonFileAdapter(TEST_DIR);
+    storage = new JsonStateStore(TEST_DIR);
     engine = new CrudEngine(storage, new IdStrategy(idSchema), schema, 'pets');
   });
 
@@ -81,6 +135,33 @@ describe('CrudEngine', () => {
     await engine.create({ name: 'Buddy', tag: 'dog' });
     const result = await engine.list({ filters: { tag: 'dog' } });
     expect(result.items).toHaveLength(2);
+    expect(result.total).toBe(2);
+  });
+
+  it('computes filtered totals when storage only supports legacy count(resource)', async () => {
+    const legacyStorage = new LegacyCountAdapter([
+      { id: 1, name: 'Rex', tag: 'dog' },
+      { id: 2, name: 'Whiskers', tag: 'cat' },
+      { id: 3, name: 'Buddy', tag: 'dog' },
+    ]);
+    const legacyEngine = new CrudEngine(legacyStorage, new IdStrategy(idSchema), schema, 'pets');
+
+    const result = await legacyEngine.list({ filters: { tag: 'dog' }, limit: 1, offset: 1 });
+
+    expect(result.items).toEqual([{ id: 3, name: 'Buddy', tag: 'dog' }]);
+    expect(result.total).toBe(2);
+  });
+
+  it('calls legacy count(resource) with one argument on unfiltered lists', async () => {
+    const legacyStorage = new StrictLegacyCountAdapter([
+      { id: 1, name: 'Rex', tag: 'dog' },
+      { id: 2, name: 'Whiskers', tag: 'cat' },
+    ]);
+    const legacyEngine = new CrudEngine(legacyStorage, new IdStrategy(idSchema), schema, 'pets');
+
+    const result = await legacyEngine.list({ limit: 1, offset: 0 });
+
+    expect(result.items).toEqual([{ id: 1, name: 'Rex', tag: 'dog' }]);
     expect(result.total).toBe(2);
   });
 

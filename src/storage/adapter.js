@@ -19,7 +19,11 @@ export class StorageAdapter {
     throw new Error('Not implemented');
   }
 
-  async count(resource) {
+  async count(resource, query) {
+    throw new Error('Not implemented');
+  }
+
+  async writeRegistry(registry) {
     throw new Error('Not implemented');
   }
 }

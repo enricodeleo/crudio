@@ -1,4 +1,4 @@
-import { DuplicateIdError, NotFoundError } from '../http/errors.js';
+import { DuplicateIdError } from '../http/errors.js';
 
 export class CrudEngine {
   constructor(storage, idStrategy, schema, resourceName) {
@@ -12,13 +12,23 @@ export class CrudEngine {
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
     const filters = query.filters ?? {};
+    const hasFilters = Object.keys(filters).length > 0;
+    const supportsFilteredCount = this.storage.count.length >= 2;
+    let total;
 
-    const filtered = await this.storage.findAll(this.resourceName, {
+    if (supportsFilteredCount) {
+      total = await this.storage.count(this.resourceName, { filters });
+    } else if (hasFilters) {
+      total = (await this.storage.findAll(this.resourceName, { filters })).length;
+    } else {
+      total = await this.storage.count(this.resourceName);
+    }
+
+    const items = await this.storage.findAll(this.resourceName, {
       filters,
+      limit,
+      offset,
     });
-    const total = filtered.length;
-
-    const items = filtered.slice(offset, offset + limit);
 
     return { items, total };
   }

@@ -9,7 +9,7 @@ import {
 } from '../../src/seed/seedEngine.js';
 import { CrudEngine } from '../../src/engine/crudEngine.js';
 import { IdStrategy } from '../../src/engine/idStrategy.js';
-import { JsonFileAdapter } from '../../src/storage/jsonFileAdapter.js';
+import { JsonStateStore } from '../../src/storage/jsonStateStore.js';
 
 class InMemoryAdapter {
   constructor() {
@@ -65,7 +65,7 @@ describe('seedEngine', () => {
   beforeEach(() => {
     rmSync(TEST_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DIR, { recursive: true });
-    storage = new JsonFileAdapter(TEST_DIR);
+    storage = new JsonStateStore(TEST_DIR);
     engine = new CrudEngine(storage, new IdStrategy({ type: 'integer' }), schema, 'pets');
   });
 

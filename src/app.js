@@ -6,13 +6,13 @@ import { buildRoutes } from './http/routeBuilder.js';
 import { createValidators } from './http/validators.js';
 import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
-import { JsonFileAdapter } from './storage/jsonFileAdapter.js';
+import { JsonStateStore } from './storage/jsonStateStore.js';
 import { seedAll } from './seed/seedEngine.js';
 
 export async function createApp({ specPath, dataDir, resources: resourceConfig, seed, seedPerResource }) {
   const spec = await loadSpec(specPath);
   const discovered = discoverResources(spec, resourceConfig);
-  const storage = new JsonFileAdapter(dataDir);
+  const storage = new JsonStateStore(dataDir);
 
   const engines = new Map();
   const validators = new Map();

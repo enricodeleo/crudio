@@ -86,6 +86,64 @@ describe('inferResources', () => {
     ]);
   });
 
+  it('infers a resource from paired paths even when get operations are absent', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/items': {
+          post: {
+            operationId: 'createItem',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+            responses: {
+              '201': { description: 'created' },
+            },
+          },
+        },
+        '/items/{itemId}': {
+          delete: {
+            operationId: 'deleteItem',
+            parameters: [
+              { name: 'itemId', in: 'path', required: true, schema: { type: 'string' } },
+            ],
+            responses: {
+              '204': { description: 'deleted' },
+            },
+          },
+        },
+      },
+    };
+
+    expect(inferResources(compile(spec), {})).toMatchObject([
+      {
+        name: 'items',
+        collectionPath: '/items',
+        itemPath: '/items/{itemId}',
+        idParam: 'itemId',
+        idSchema: { type: 'string' },
+        methods: ['create', 'delete'],
+        schema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+          },
+        },
+      },
+    ]);
+  });
+
   it('throws when two collection paths collide on the derived name', () => {
     const spec = {
       openapi: '3.0.3',

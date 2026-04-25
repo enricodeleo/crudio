@@ -8,6 +8,14 @@ function getOperation(byKey, method, openApiPath) {
   return byKey.get(`${method} ${openApiPath}`) ?? null;
 }
 
+function isItemPath(openApiPath) {
+  return /\{[^}]+\}$/.test(openApiPath);
+}
+
+function getCollectionPath(itemPath) {
+  return itemPath.replace(/\/\{[^}]+\}$/, '');
+}
+
 function extractMethods(byKey, collectionPath, itemPath) {
   const methods = [];
 
@@ -69,10 +77,13 @@ function extractIdSchema(byKey, itemPath, idParam) {
   );
 }
 
-function buildResourceFromPair(collectionOperation, itemOperation, byKey) {
-  const collectionPath = collectionOperation.openApiPath;
-  const itemPath = itemOperation.openApiPath;
-  const idParam = itemOperation.pathParams[0] ?? null;
+function buildResourceFromPair(collectionPath, itemPath, byKey) {
+  const itemOperation =
+    getOperation(byKey, 'GET', itemPath) ??
+    getOperation(byKey, 'DELETE', itemPath) ??
+    getOperation(byKey, 'PUT', itemPath) ??
+    getOperation(byKey, 'PATCH', itemPath);
+  const idParam = itemOperation?.pathParams[0] ?? null;
   const name = deriveResourceName(collectionPath);
 
   const schema =
@@ -94,21 +105,21 @@ export function inferResources(operations, resourceConfig = {}) {
   const byKey = new Map(operations.map((operation) => [operation.key, operation]));
   const resources = [];
   const nameToPath = new Map();
+  const pairedPaths = new Set();
 
   for (const operation of operations) {
-    if (operation.method !== 'GET' || operation.pathParams.length !== 0) continue;
+    const openApiPath = operation.openApiPath;
+    if (pairedPaths.has(openApiPath) || isItemPath(openApiPath)) continue;
 
     const itemCandidate = operations.find(
       (candidate) =>
-        candidate.method === 'GET' &&
         candidate.pathParams.length === 1 &&
-        candidate.openApiPath.startsWith(`${operation.openApiPath}/{`) &&
-        candidate.openApiPath.split('/').length === operation.openApiPath.split('/').length + 1
+        getCollectionPath(candidate.openApiPath) === openApiPath
     );
 
     if (!itemCandidate) continue;
 
-    const resource = buildResourceFromPair(operation, itemCandidate, byKey, resourceConfig);
+    const resource = buildResourceFromPair(openApiPath, itemCandidate.openApiPath, byKey, resourceConfig);
     const existing = nameToPath.get(resource.name);
 
     if (existing && existing !== resource.collectionPath) {
@@ -119,6 +130,7 @@ export function inferResources(operations, resourceConfig = {}) {
     }
 
     nameToPath.set(resource.name, resource.collectionPath);
+    pairedPaths.add(resource.collectionPath);
     resources.push(resource);
   }
 

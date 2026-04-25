@@ -10,8 +10,9 @@ import { JsonStateStore } from './storage/jsonStateStore.js';
 import { seedAll } from './seed/seedEngine.js';
 
 export async function createApp({ specPath, dataDir, resources: resourceConfig, seed, seedPerResource }) {
+  const effectiveResourceConfig = mergeResourceConfig(resourceConfig, seedPerResource);
   const spec = await loadSpec(specPath);
-  const discovered = discoverResources(spec, resourceConfig);
+  const discovered = discoverResources(spec, effectiveResourceConfig);
   const storage = new JsonStateStore(dataDir);
 
   const engines = new Map();
@@ -32,7 +33,7 @@ export async function createApp({ specPath, dataDir, resources: resourceConfig, 
     validators.set(resource.name, createValidators(normalizedSchema));
   }
 
-  if (seed) {
+  if (shouldSeed(seed, effectiveResourceConfig)) {
     const normalizedResources = discovered.map((r) => ({
       ...r,
       schema: normalize(r.schema, r.name),
@@ -40,7 +41,7 @@ export async function createApp({ specPath, dataDir, resources: resourceConfig, 
     const engineMap = new Map(
       discovered.map((r) => [r.name, engines.get(r.name).engine])
     );
-    await seedAll(normalizedResources, engineMap, seed, seedPerResource);
+    await seedAll(normalizedResources, engineMap, { count: seed }, effectiveResourceConfig);
   }
 
   const routes = buildRoutes(discovered);
@@ -74,6 +75,27 @@ export async function createApp({ specPath, dataDir, resources: resourceConfig, 
   });
 
   return app;
+}
+
+function mergeResourceConfig(resourceConfig = {}, seedPerResource = {}) {
+  const merged = { ...resourceConfig };
+
+  for (const [resourceName, count] of Object.entries(seedPerResource ?? {})) {
+    merged[resourceName] = {
+      ...(merged[resourceName] ?? {}),
+      seed: {
+        ...(merged[resourceName]?.seed ?? {}),
+        count: merged[resourceName]?.seed?.count ?? count,
+      },
+    };
+  }
+
+  return merged;
+}
+
+function shouldSeed(seed, resourceConfig = {}) {
+  if (seed !== undefined) return true;
+  return Object.values(resourceConfig).some((config) => config?.seed?.count !== undefined);
 }
 
 function createHandler(operation, engine, validators, idParam, resourceName) {

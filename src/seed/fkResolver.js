@@ -12,8 +12,13 @@ function italianPlurals(stem) {
   return [...out];
 }
 
-export function resolveFK(propName, propSchema, resourceNames) {
+export function resolveFK(propName, propSchema, resourceNames, overrides = {}) {
   if (!propName || !Array.isArray(resourceNames)) return null;
+
+  const configured = overrides[propName];
+  if (configured && resourceNames.includes(configured)) {
+    return { target: configured, isArray: propSchema?.type === 'array' };
+  }
 
   const explicit = propSchema?.['x-crudio-ref'];
   if (explicit) {

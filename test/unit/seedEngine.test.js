@@ -233,4 +233,75 @@ describe('seedAll (FK coherence)', () => {
       expect(divIds.has(n.division_id)).toBe(true);
     }
   });
+
+  it('prefers config-defined foreign keys when heuristic misses', async () => {
+    const users = build('users', {
+      type: 'object',
+      required: ['name'],
+      properties: { id: { type: 'integer' }, name: { type: 'string' } },
+    });
+    const posts = build('posts', {
+      type: 'object',
+      required: ['title', 'authorId'],
+      properties: {
+        id: { type: 'integer' },
+        title: { type: 'string' },
+        authorId: { type: 'integer' },
+      },
+    });
+    const engines = new Map([
+      ['users', users.engine],
+      ['posts', posts.engine],
+    ]);
+
+    await seedAll([users, posts], engines, { count: 3 }, {
+      posts: {
+        foreignKeys: {
+          authorId: 'users',
+        },
+      },
+    });
+
+    const allUsers = await storage.findAll('users');
+    const allPosts = await storage.findAll('posts');
+    const userIds = new Set(allUsers.map((user) => user.id));
+
+    expect(allUsers).toHaveLength(3);
+    expect(allPosts).toHaveLength(3);
+    for (const post of allPosts) {
+      expect(userIds.has(post.authorId)).toBe(true);
+    }
+  });
+
+  it('uses per-resource seed counts before global seed count', async () => {
+    const users = build('users', {
+      type: 'object',
+      required: ['name'],
+      properties: { id: { type: 'integer' }, name: { type: 'string' } },
+    });
+    const posts = build('posts', {
+      type: 'object',
+      required: ['title'],
+      properties: { id: { type: 'integer' }, title: { type: 'string' } },
+    });
+    const engines = new Map([
+      ['users', users.engine],
+      ['posts', posts.engine],
+    ]);
+
+    const counts = await seedAll([users, posts], engines, { count: 5 }, {
+      posts: {
+        seed: {
+          count: 2,
+        },
+      },
+    });
+
+    expect(await storage.count('users')).toBe(5);
+    expect(await storage.count('posts')).toBe(2);
+    expect(counts).toEqual({
+      users: 5,
+      posts: 2,
+    });
+  });
 });

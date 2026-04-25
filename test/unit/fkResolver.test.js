@@ -60,6 +60,15 @@ describe('resolveFK', () => {
     });
   });
 
+  it('prefers config-defined foreign keys over naming heuristics', () => {
+    expect(
+      resolveFK('authorId', { type: 'integer' }, resources, { authorId: 'users' })
+    ).toEqual({
+      target: 'users',
+      isArray: false,
+    });
+  });
+
   it('honors explicit x-crudio-ref even when heuristic misses', () => {
     const schema = { type: 'string', 'x-crudio-ref': 'divisioni' };
     expect(resolveFK('division_id', schema, resources)).toEqual({

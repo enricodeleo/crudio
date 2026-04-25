@@ -15,13 +15,29 @@ function walkSchema(schema, visit, seen = new Set()) {
   if (Array.isArray(schema.allOf)) schema.allOf.forEach((s) => walkSchema(s, visit, seen));
 }
 
-export function buildFKGraph(resources) {
+function resolveResourceConfig(resourceConfig, resourceName) {
+  const config = resourceConfig?.[resourceName];
+  if (typeof config === 'number') {
+    return { seed: { count: config } };
+  }
+  return config ?? {};
+}
+
+function resolveSeedCount(globalSeed, resourceConfig, resourceName) {
+  const resourceSeedCount = resolveResourceConfig(resourceConfig, resourceName).seed?.count;
+  if (resourceSeedCount !== undefined) return resourceSeedCount;
+  if (typeof globalSeed === 'number') return globalSeed;
+  return globalSeed?.count ?? 0;
+}
+
+export function buildFKGraph(resources, resourceConfig = {}) {
   const names = resources.map((r) => r.name);
   const graph = new Map();
   for (const r of resources) {
     const deps = new Set();
+    const foreignKeys = resolveResourceConfig(resourceConfig, r.name).foreignKeys ?? {};
     walkSchema(r.schema, (propName, propSchema) => {
-      const fk = resolveFK(propName, propSchema, names);
+      const fk = resolveFK(propName, propSchema, names, foreignKeys);
       if (fk && fk.target !== r.name) deps.add(fk.target);
     });
     graph.set(r.name, deps);
@@ -64,9 +80,10 @@ export async function seedResource(engine, schema, count, ctx = null) {
   }
 }
 
-export async function seedAll(resources, engines, seedCount, perResource = {}) {
-  const graph = buildFKGraph(resources);
+export async function seedAll(resources, engines, globalSeed, resourceConfig = {}) {
+  const graph = buildFKGraph(resources, resourceConfig);
   const { sorted, cycles } = topoSort(resources, graph);
+  const counts = {};
   if (cycles.size > 0) {
     console.warn(
       `Cyclic FK dependencies detected for: ${[...cycles].join(', ')}. ` +
@@ -78,8 +95,7 @@ export async function seedAll(resources, engines, seedCount, perResource = {}) {
   const byName = new Map(resources.map((r) => [r.name, r]));
   const idPools = new Map(names.map((n) => [n, []]));
 
-  const ctx = {
-    resolveFK: (propName, propSchema) => resolveFK(propName, propSchema, names),
+  const sharedCtx = {
     sampleId: (target) => {
       const pool = idPools.get(target);
       if (!pool || pool.length === 0) return null;
@@ -100,7 +116,13 @@ export async function seedAll(resources, engines, seedCount, perResource = {}) {
     const resource = byName.get(name);
     const engine = engines.get(name);
     if (!resource || !engine) continue;
-    const count = perResource[name] ?? seedCount;
+    const foreignKeys = resolveResourceConfig(resourceConfig, name).foreignKeys ?? {};
+    const count = resolveSeedCount(globalSeed, resourceConfig, name);
+    counts[name] = count;
+    const ctx = {
+      ...sharedCtx,
+      resolveFK: (propName, propSchema) => resolveFK(propName, propSchema, names, foreignKeys),
+    };
     for (let i = 0; i < count; i++) {
       const fakeData = generateFake(resource.schema, true, ctx);
       if (!fakeData) continue;
@@ -109,4 +131,6 @@ export async function seedAll(resources, engines, seedCount, perResource = {}) {
       idPools.get(name).push(created.id);
     }
   }
+
+  return counts;
 }

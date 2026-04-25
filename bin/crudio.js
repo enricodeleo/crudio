@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createApp } from '../src/app.js';
+import { parseArgs } from '../src/cli/parseArgs.js';
 import { loadConfig } from '../src/config.js';
 
 const args = process.argv.slice(2);
@@ -19,29 +20,12 @@ Options:
   process.exit(0);
 }
 
-function parseArgs(args) {
-  const result = { specPath: args[0] };
-  for (let i = 1; i < args.length; i++) {
-    switch (args[i]) {
-      case '--port':
-      case '-p':
-        result.port = parseInt(args[++i], 10);
-        break;
-      case '--data-dir':
-      case '-d':
-        result.dataDir = args[++i];
-        break;
-      case '--seed':
-      case '-s':
-        result.seed = parseInt(args[++i], 10);
-        break;
-      case '--config':
-      case '-c':
-        result.config = args[++i];
-        break;
-    }
-  }
-  return result;
+function toLegacySeedPerResource(resources) {
+  return Object.fromEntries(
+    Object.entries(resources)
+      .filter(([, config]) => config.seed?.count !== undefined)
+      .map(([resourceName, config]) => [resourceName, config.seed.count])
+  );
 }
 
 async function main() {
@@ -52,8 +36,8 @@ async function main() {
     specPath: config.specPath,
     dataDir: config.dataDir,
     resources: config.resources,
-    seed: config.seed,
-    seedPerResource: config.seedPerResource,
+    seed: config.seed.count,
+    seedPerResource: toLegacySeedPerResource(config.resources),
   });
 
   const server = app.listen(config.port, () => {

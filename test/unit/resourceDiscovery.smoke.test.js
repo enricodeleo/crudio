@@ -78,4 +78,69 @@ describe('resourceDiscovery smoke', () => {
 
     expect(() => discoverResources(spec)).toThrow(/Resource name collision.*"a-b"/);
   });
+
+  it('temporarily preserves config exclude behavior for the current app boot path until Task 6', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/items': {
+          get: { responses: { '200': { description: 'ok' } } },
+        },
+        '/items/{itemId}': {
+          get: {
+            parameters: [
+              { name: 'itemId', in: 'path', required: true, schema: { type: 'integer' } },
+            ],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    };
+
+    expect(discoverResources(spec, { items: { exclude: true } })).toEqual([]);
+  });
+
+  it('temporarily preserves config method narrowing for the current app boot path until Task 6', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/items': {
+          get: { responses: { '200': { description: 'ok' } } },
+          post: {
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object' },
+                },
+              },
+            },
+            responses: { '201': { description: 'created' } },
+          },
+        },
+        '/items/{itemId}': {
+          get: {
+            parameters: [
+              { name: 'itemId', in: 'path', required: true, schema: { type: 'integer' } },
+            ],
+            responses: { '200': { description: 'ok' } },
+          },
+          delete: {
+            parameters: [
+              { name: 'itemId', in: 'path', required: true, schema: { type: 'integer' } },
+            ],
+            responses: { '204': { description: 'deleted' } },
+          },
+        },
+      },
+    };
+
+    expect(discoverResources(spec, { items: { methods: ['list', 'getById'] } })).toMatchObject([
+      {
+        name: 'items',
+        methods: ['list', 'getById'],
+      },
+    ]);
+  });
 });

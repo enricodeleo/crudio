@@ -23,6 +23,28 @@ export class StorageAdapter {
     throw new Error('Not implemented');
   }
 
+  // Empty scope ('') is the concrete scope for path-less operations.
+  // Default state is a separate fallback template, not the same entry.
+  async readOperationState(operationKey, scopeKey) {
+    throw new Error('Not implemented');
+  }
+
+  async writeOperationState(operationKey, scopeKey, state) {
+    throw new Error('Not implemented');
+  }
+
+  async deleteOperationState(operationKey, scopeKey) {
+    throw new Error('Not implemented');
+  }
+
+  async readOperationDefaultState(operationKey) {
+    throw new Error('Not implemented');
+  }
+
+  async writeOperationDefaultState(operationKey, state) {
+    throw new Error('Not implemented');
+  }
+
   async writeRegistry(registry) {
     throw new Error('Not implemented');
   }

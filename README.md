@@ -1,7 +1,7 @@
 <h1 align="center">Crudio</h1>
 
 <p align="center">
-  <strong>Turn an OpenAPI 3.x spec into a working, stateful CRUD backend.</strong>
+  <strong>Turn an OpenAPI 3.x spec into a working, stateful mock backend.</strong>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ## What is Crudio?
 
-Crudio reads an OpenAPI 3.x specification and spins up a working CRUD API — validated, persistent, derived entirely from your schema. Think of it as a mock server with real state, real validation, and real persistence.
+Crudio reads an OpenAPI 3.x specification and spins up a working mock API with persistence — stateful, schema-driven, derived entirely from your contract. CRUD endpoints behave like a small real backend; non-CRUD endpoints keep per-operation state so the whole spec is servable from one runtime.
 
 ## Why
 
@@ -20,14 +20,15 @@ Mock servers return canned responses. That's fine for smoke tests, but not enoug
 
 Crudio gives you a backend that behaves like a real one — because it derives everything from your API contract:
 
-- requests are validated against your schema
+- CRUD request bodies are validated against your schema
 - data persists across calls (JSON files, no database needed)
 - IDs are generated based on your spec (integers, UUIDs, etc.)
-- CRUD operations work exactly as defined in the OpenAPI document
+- CRUD routes use shared resource state
+- non-CRUD routes use persisted operation state
 
 **Use it for:** integration testing, frontend development, API prototyping, contract verification.
 
-**Don't use it for:** production backends, load testing, or anything that needs business logic beyond CRUD.
+**Don't use it for:** production backends, load testing, or anything that needs domain-specific business logic without custom handlers.
 
 ## Quick Start
 
@@ -70,7 +71,7 @@ curl -X DELETE http://localhost:3000/pets/1
 # → 204
 ```
 
-Invalid requests are rejected against your schema:
+Invalid CRUD requests are rejected against your schema:
 
 ```bash
 curl -X POST http://localhost:3000/pets \
@@ -82,12 +83,13 @@ curl -X POST http://localhost:3000/pets \
 ## How It Works
 
 1. **Load** — reads your OpenAPI 3.x spec and dereferences all `$ref` pointers
-2. **Discover** — detects CRUD resource pairs from path patterns (`/users` + `/users/{id}`)
-3. **Validate** — compiles AJV validators from your schemas for strict request checking
-4. **Route** — registers Express routes for each CRUD operation defined in the spec
-5. **Persist** — stores data in JSON files, one per resource
+2. **Compile** — normalizes every OpenAPI operation into a single registry entry
+3. **Infer** — detects CRUD resource pairs from path patterns (`/users` + `/users/{id}`)
+4. **Validate** — compiles AJV validators from your CRUD resource schemas for strict request checking
+5. **Route** — registers Express routes for every operation defined in the spec
+6. **Persist** — stores CRUD-backed resources and operation-state payloads in JSON files
 
-Only paths that match a CRUD pattern (collection + item) are implemented. Everything else returns 404.
+CRUD-shaped operations share resource state. Everything else is served as operation-state: the response body is persisted per operation scope and replayed on later reads, with optional projection into a parent resource when the response schema is a compatible subset.
 
 ## Supported / Unsupported
 
@@ -95,17 +97,19 @@ Only paths that match a CRUD pattern (collection + item) are implemented. Everyt
 
 - OpenAPI 3.0 (`$ref`, `allOf`, path parameters, request/response schemas)
 - CRUD operations: list, getById, create, update, patch, delete
-- Request validation against schema
+- non-CRUD operations with persisted per-operation state
+- CRUD request validation against schema
 - Pagination (`limit`, `offset`) and equality filters
 - Schema-driven ID generation (incremental integer, UUID, string)
-- Fake data seeding from schema
+- Fake data seeding for CRUD resources
+- explicit default and per-scope seeding for non-CRUD operations
 - Programmatic usage as a Node.js library
 
 ### Not supported (v1)
 
 - `oneOf`, `anyOf`, discriminators — Crudio fails fast with a clear error if these are present
 - Swagger 2.0
-- Authentication / authorization
+- domain-specific business logic inference
 - Sorting, nested filters, full-text search
 - File uploads / multipart
 
@@ -123,7 +127,7 @@ Usage: crudio <spec-file> [options]
 ## Documentation
 
 - [API Reference](docs/api.md) — endpoints, status codes, validation, query params, ID generation
-- [Configuration](docs/configuration.md) — config file, resource overrides, seeding options
+- [Configuration](docs/configuration.md) — config file, resource/operation overrides, seeding options
 - [Development](docs/development.md) — project structure, running tests, architecture
 
 ## Ecosystem

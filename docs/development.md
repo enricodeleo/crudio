@@ -45,18 +45,24 @@ crudio/
 │   │   └── idStrategy.js      # Schema-driven ID generation
 │   ├── storage/
 │   │   ├── adapter.js         # Storage interface
-│   │   └── jsonStateStore.js  # JSON resource + metadata persistence
+│   │   └── jsonStateStore.js  # JSON resource + operation-state persistence
 │   ├── http/
-│   │   ├── buildOperationRegistry.js # CRUD operation route registry
-│   │   ├── createOperationHandler.js # Request handlers from compiled operations
+│   │   ├── buildOperationRegistry.js # Full operation registry
+│   │   ├── createOperationHandler.js # CRUD-backed request handlers
+│   │   ├── createOperationStateHandler.js # Non-CRUD operation-state handlers
 │   │   ├── validators.js      # AJV validation
 │   │   └── errors.js          # Error classes
+│   ├── operations/
+│   │   ├── projectResourceState.js # Safe projection into parent resources
+│   │   └── scopeKey.js        # Canonical operation scope key builder
 │   └── seed/
-│       ├── seedEngine.js      # Seeding orchestrator
+│       ├── operationSeedEngine.js # Non-CRUD operation-state seeding
+│       ├── seedEngine.js      # CRUD resource seeding orchestrator
 │       └── fakeGenerator.js   # Schema-aware fake data
 ├── test/
 │   ├── fixtures/
-│   │   └── petstore.yaml      # Sample OpenAPI 3.0 spec
+│   │   ├── operation-state.yaml # Stage 2 operation-state fixture
+│   │   └── petstore.yaml        # CRUD conformance fixture
 │   ├── unit/
 │   └── integration/
 ├── package.json
@@ -67,13 +73,14 @@ crudio/
 
 Each module has a single responsibility and no cross-cutting dependencies:
 
-- **`openapi/`** — spec loading, schema resolution, operation compilation, CRUD inference
+- **`openapi/`** — spec loading, schema resolution, full operation compilation, CRUD inference
 - **`engine/`** — pure CRUD logic with no HTTP awareness
-- **`storage/`** — persistence interface and namespaced JSON state storage
-- **`http/`** — operation registry, request handlers, validation, error handling
-- **`seed/`** — fake data generation and seeding
+- **`storage/`** — persistence interface and namespaced JSON storage for resources and operations
+- **`http/`** — operation registry, CRUD handlers, operation-state handlers, validation, error handling
+- **`operations/`** — scope key construction and safe resource projection helpers
+- **`seed/`** — fake data generation plus resource and operation-state seeding
 
-The `CrudEngine` never touches HTTP or Express. `compileOperations()` is the app bootstrap source of truth, and `inferResources()` derives the CRUD-backed resources from that operation list. Data flows through well-defined interfaces.
+`compileOperations()` is the bootstrap source of truth. `inferResources()` derives only the CRUD-backed subset from that operation list; everything else is mounted as operation-state. `CrudEngine` never touches HTTP or Express, and non-CRUD state persistence goes through `StorageAdapter` instead of the engine layer.
 
 ## Adding a Storage Adapter
 
@@ -87,8 +94,13 @@ class StorageAdapter {
   async update(resource, id, data) {}
   async delete(resource, id) {}
   async count(resource, query) {}
+  async readOperationState(operationKey, scopeKey) {}
+  async writeOperationState(operationKey, scopeKey, state) {}
+  async deleteOperationState(operationKey, scopeKey) {}
+  async readOperationDefaultState(operationKey) {}
+  async writeOperationDefaultState(operationKey, state) {}
   async writeRegistry(registry) {}
 }
 ```
 
-Then pass your adapter to `CrudEngine` instead of `JsonStateStore`.
+`JsonStateStore` is the built-in implementation. If you add another adapter, keep the same contract for both CRUD resource state and operation-state persistence and wire it in at the app composition layer.

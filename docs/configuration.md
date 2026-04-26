@@ -2,7 +2,7 @@
 
 ## Zero Config
 
-Crudio works with no configuration against any valid OpenAPI 3.x spec.
+Crudio works without a config file against any valid OpenAPI 3.x spec. The config file is only for persistence, seeding, FK overrides, and per-operation behavior the spec does not express clearly.
 
 ## CLI Flags
 
@@ -14,7 +14,7 @@ npx crudio ./openapi.yaml --port 8080 --seed 10
 |------|---------|-------------|
 | `--port, -p` | `3000` | Port to listen on |
 | `--data-dir, -d` | `./data` | Directory for JSON storage |
-| `--seed, -s` | — | Seed N fake records per resource |
+| `--seed, -s` | — | Sets top-level `seed.count` for CRUD resource seeding |
 | `--config, -c` | — | Path to config file |
 
 CLI flags override config file values.
@@ -28,23 +28,41 @@ export default {
   port: 3000,
   dataDir: './data',
 
+  seed: {
+    count: 10,
+  },
+
   resources: {
-    pets: {
-      methods: ['list', 'getById'],
-    },
-    orders: {
-      exclude: true,
-    },
     users: {
-      idParam: 'userId',
+      foreignKeys: {
+        managerId: 'users',
+      },
+      seed: {
+        count: 5,
+      },
     },
   },
 
-  seed: {
-    count: 10,
-    resources: {
-      pets: 20,
-      users: 5,
+  operations: {
+    'GET /countries/{code}/summary': {
+      querySensitive: true,
+      seed: {
+        default: { status: 'draft' },
+        scopes: {
+          'code=IT&locale=it': { status: 'ready' },
+        },
+      },
+    },
+    'POST /auth/login': {
+      enabled: false,
+    },
+    startRelease: {
+      mode: 'resource-aware',
+      seed: {
+        scopes: {
+          'id=1': { status: 'started' },
+        },
+      },
     },
   },
 };
@@ -54,58 +72,120 @@ export default {
 npx crudio ./openapi.yaml --config ./crudio.config.js
 ```
 
-## Resource Overrides
+Crudio does not extend OpenAPI. Per-operation and per-resource behavior the spec cannot express is configured only in `crudio.config.js`.
+
+## Top-Level Options
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `methods` | `string[]` | Only expose these operations (`list`, `getById`, `create`, `update`, `patch`, `delete`) |
-| `exclude` | `boolean` | Skip this resource entirely |
-| `idParam` | `string` | Custom path parameter name for the ID |
+| `port` | `number` | HTTP port |
+| `dataDir` | `string` | Storage directory |
+| `seed.count` | `number` | Default CRUD seed count |
+| `seed.strategy` | `'config-first' \| 'examples-first' \| 'fakes-only'` | Parsed config field reserved for future resource-seeding policy |
 
-## Seeding
+`--seed N` maps only to `seed.count`. Per-resource and per-operation seeding must come from config.
 
-Generate fake data from your schemas:
+## Resource Options
 
-```bash
-npx crudio ./openapi.yaml --seed 10
-```
-
-Schema-aware generation using `@faker-js/faker`:
-
-| Schema | Generated Value |
-|--------|----------------|
-| `{ type: "string" }` | Random word |
-| `{ type: "string", format: "email" }` | Email address |
-| `{ type: "string", format: "uri" }` | URL |
-| `{ type: "string", format: "uuid" }` | UUID v4 |
-| `{ type: "string", format: "date-time" }` | ISO 8601 timestamp |
-| `{ type: "string", enum: [...] }` | Random pick from enum |
-| `{ type: "integer" }` | Random integer |
-| `{ type: "number" }` | Random float |
-| `{ type: "boolean" }` | Random boolean |
-| `{ type: "array", items: {...} }` | 1–3 generated items |
-| `{ type: "object", properties: {...} }` | Recursively generated |
-
-Required properties are always generated. Optional properties have a ~50% chance of being included.
-
-## Storage
-
-Data is stored as JSON files, one per resource:
-
-```
-data/
-  pets.json
-  users.json
-```
-
-Format:
-
-```json
-{
-  "items": [
-    { "id": 1, "name": "Rex", "tag": "dog" }
-  ]
+```js
+resources: {
+  posts: {
+    foreignKeys: {
+      authorId: 'users',
+    },
+    seed: {
+      count: 20,
+    },
+  },
 }
 ```
 
-Files are created on first write. Missing files are treated as empty collections.
+| Option | Type | Description |
+|--------|------|-------------|
+| `foreignKeys` | `Record<string, string>` | Override FK inference for schema properties like `authorId` |
+| `seed.count` | `number` | Seed count override for that CRUD resource |
+
+Resource names come from inferred CRUD collection/item path pairs. The old `methods`, `exclude`, and `idParam` overrides are not part of the operation-first config model.
+
+## Operation Options
+
+Operations can be addressed either by canonical key (`'POST /releases/{id}/start'`) or by `operationId` when present. If both point to the same operation, config loading fails.
+
+```js
+operations: {
+  'GET /countries/{code}/summary': {
+    mode: 'operation-state',
+    querySensitive: true,
+    seed: {
+      default: { code: 'IT', status: 'draft' },
+      scopes: {
+        'code=IT&locale=it': { code: 'IT', status: 'published' },
+      },
+    },
+  },
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | `boolean` | `true` | Disable a single route when `false` |
+| `mode` | `'auto' \| 'operation-state' \| 'resource-aware'` | `'auto'` | State resolution mode for non-CRUD operations |
+| `querySensitive` | `boolean` | `false` | Include all present query params in the operation scope key |
+| `seed.default` | `object` | — | Default response-shaped state for that operation |
+| `seed.scopes` | `Record<string, object>` | `{}` | Explicit scope-keyed response-shaped state |
+
+`mode` applies only to non-CRUD operations. CRUD-claimed operations always use shared resource state.
+
+### Mode Semantics
+
+- `auto`: keep operation state isolated unless the runtime can safely project into a parent resource
+- `operation-state`: always isolate state per operation scope
+- `resource-aware`: request projection into a parent resource; if the rule is unsatisfied at startup, Crudio warns and falls back to `operation-state`
+
+### Scope Keys
+
+Operation scope keys use `name=value` pairs joined by `&`, ordered alphabetically by parameter name, with values URL-encoded.
+
+Examples:
+
+- `id=1`
+- `code=IT&locale=it`
+- `code=IT&cityId=42`
+
+An empty string scope key (`''`) is valid for path-less operations. When `querySensitive: true`, all present query params participate in the scope key.
+
+## Seeding
+
+CRUD resources use schema-driven fake generation. Non-CRUD operations use explicit response-shaped seed data.
+
+CRUD seed precedence is:
+
+1. `resources.<name>.seed`
+2. top-level `seed.count`
+
+Operation-state seeds come only from `operations.<key>.seed`.
+
+`seed.strategy` is already accepted by config loading, but the current runtime still behaves like `config-first` for CRUD seeding. The named values reserved for that future policy are:
+
+- `config-first`
+- `examples-first`
+- `fakes-only`
+
+## Storage
+
+Crudio stores CRUD resource state and operation state separately:
+
+```text
+data/
+  _meta/
+    registry.json
+  resources/
+    pets.json
+    users.json
+  operations/
+    8d4d6b4a....json
+```
+
+- `resources/*.json` contains shared CRUD collections
+- `operations/*.json` contains hashed operation-state buckets
+- `_meta/registry.json` maps operation keys, methods, paths, and operationIds to stable storage entries

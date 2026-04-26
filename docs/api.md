@@ -2,22 +2,51 @@
 
 ## Endpoints
 
-For each resource discovered in your spec, Crudio registers routes based on which HTTP methods are present.
+Crudio registers one Express route for every OpenAPI operation in the spec.
+
+There are two runtime classes:
+
+- `resource` routes: CRUD-shaped operations backed by shared resource state
+- `operation-state` routes: every other operation, backed by persisted per-operation state
+
+## CRUD-Shaped Routes
+
+When the spec exposes a collection/item pair like `/pets` and `/pets/{id}`, Crudio derives a shared resource and wires whichever CRUD methods are present.
 
 | Method | Path | Operation | Success | Error |
 |--------|------|-----------|---------|-------|
 | `GET` | `/resources` | List all | `200` | — |
 | `GET` | `/resources/:id` | Get by ID | `200` | `404` |
-| `POST` | `/resources` | Create | `201` | `400` |
+| `POST` | `/resources` | Create | `201` | `400` `409` |
 | `PUT` | `/resources/:id` | Full update | `200` | `400` `404` |
 | `PATCH` | `/resources/:id` | Partial update | `200` | `400` `404` |
 | `DELETE` | `/resources/:id` | Delete | `204` | `404` |
 
-Only methods defined in your spec are registered. If a resource has no `PATCH`, the route won't exist.
+Only methods defined in the spec are registered.
 
-### Health Check
+## Operation-State Routes
 
-```
+Non-CRUD operations are still mounted and persisted, but their state is keyed by operation plus scope instead of by shared collection.
+
+Typical examples:
+
+- `GET /countries/{code}/summary`
+- `POST /auth/login`
+- `POST /releases/{id}/start`
+
+Default behavior:
+
+- `GET` reads scoped state, then falls back to default seeded state, then returns `404`
+- `POST` and `PUT` persist a response-shaped body built from seeded default state, request body, and path params
+- `PATCH` shallow-merges into existing scoped state, or into default seeded state when no scoped state exists yet
+- `DELETE` removes the scoped state and returns `404` when the scope does not exist
+- `204`-only operations return `204` and do not create response-shaped stored state
+
+When an operation descends from a CRUD resource item path and its response schema is a compatible subset, `mode: 'auto'` or `mode: 'resource-aware'` can also project overlapping fields back into the parent resource item.
+
+## Health Check
+
+```http
 GET /_crudio/health
 ```
 
@@ -28,13 +57,15 @@ GET /_crudio/health
 }
 ```
 
-## List Endpoint
+`resources` lists the inferred CRUD-backed resource names.
 
-```
+## CRUD List Semantics
+
+```http
 GET /pets?tag=dog&limit=10&offset=20
 ```
 
-**Response:**
+**Response**
 
 ```json
 {
@@ -43,31 +74,32 @@ GET /pets?tag=dog&limit=10&offset=20
 }
 ```
 
-- `total` is the count **after filtering, before pagination**
+- `total` is the count after filtering and before pagination
 - `items` is the sliced page
 
 ### Query Parameters
 
 | Parameter | Default | Max | Description |
 |-----------|---------|-----|-------------|
-| `limit` | 100 | 1000 | Items to return |
-| `offset` | 0 | — | Items to skip |
+| `limit` | `100` | `1000` | Items to return |
+| `offset` | `0` | — | Items to skip |
 | `<field>` | — | — | Equality filter on top-level fields |
 
 - Multiple filters are AND-combined
-- Only top-level properties (no `?address.city=Rome`)
+- Only top-level properties are filterable
 
 ## Validation
 
-Request bodies are validated against your OpenAPI schemas using AJV.
+Request bodies are validated against OpenAPI schemas using AJV.
 
 | Operation | Validation |
 |-----------|------------|
-| `POST` (create) | Schema with `id` removed from required (auto-generated) |
-| `PUT` (update) | Full schema including required fields |
-| `PATCH` (partial) | Schema with `required: []` — only provided fields are type-checked |
+| CRUD `POST` | Schema with generated `id` removed from required |
+| CRUD `PUT` | Full resource schema including required fields |
+| CRUD `PATCH` | Partial schema with only provided fields checked |
+| Operation-state routes | No request validator yet beyond Express JSON parsing |
 
-**Error response** (`400`):
+**Error response** (`400`)
 
 ```json
 {
@@ -86,7 +118,7 @@ Request bodies are validated against your OpenAPI schemas using AJV.
 
 ## ID Generation
 
-IDs are determined by the schema type of the path parameter:
+CRUD resource IDs are determined by the schema type of the item path parameter:
 
 | Schema | Strategy | Example |
 |--------|----------|---------|
@@ -103,14 +135,14 @@ IDs are determined by the schema type of the path parameter:
 
 | Code | When |
 |------|------|
-| `200` | Success (GET, PUT, PATCH) |
-| `201` | Created (POST) |
-| `204` | Deleted (DELETE, no body) |
+| `200` | Success |
+| `201` | Created |
+| `204` | Success with no response body |
 | `400` | Validation error or unsupported schema feature |
-| `404` | Resource or item not found |
-| `405` | Method not registered for this path |
+| `404` | Missing resource, item, or operation-state scope |
+| `405` | Method not registered for that path |
 | `409` | Duplicate ID on create |
-| `500` | Unexpected error |
+| `500` | Unexpected internal error |
 
 ## Programmatic Usage
 
@@ -120,8 +152,20 @@ import { createApp } from 'crudio';
 const app = await createApp({
   specPath: './openapi.yaml',
   dataDir: './data',
+  resources: {
+    users: {
+      seed: { count: 5 },
+    },
+  },
+  operations: {
+    'GET /countries/{code}/summary': {
+      querySensitive: true,
+      seed: {
+        default: { code: 'IT', status: 'draft' },
+      },
+    },
+  },
   seed: 10,
-  seedPerResource: { pets: 20 },
 });
 
 app.listen(3000);
@@ -129,10 +173,13 @@ app.listen(3000);
 
 ### `createApp(options)`
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `specPath` | `string` | required | Path to OpenAPI spec |
-| `dataDir` | `string` | `./data` | JSON storage directory |
-| `resources` | `object` | `{}` | Per-resource config overrides |
-| `seed` | `number` | — | Seed N records per resource |
-| `seedPerResource` | `object` | `{}` | Per-resource seed count override |
+| Option | Type | Description |
+|--------|------|-------------|
+| `specPath` | `string` | Path to the OpenAPI spec |
+| `dataDir` | `string` | JSON storage directory |
+| `resources` | `object` | Per-resource config |
+| `operations` | `object` | Per-operation config |
+| `seed` | `number` | Default CRUD seed count |
+| `seedPerResource` | `Record<string, number>` | Internal CLI-style override map for CRUD resource seed counts |
+
+For the full config surface, prefer `crudio.config.js` plus `loadConfig()` semantics documented in [configuration.md](configuration.md).

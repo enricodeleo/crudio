@@ -37,6 +37,24 @@ const operations = {
       status: 200,
       contentType: 'application/json',
     },
+    operation: {
+      responses: {
+        '200': {
+          description: 'ok',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  status: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   },
   reportStatus: {
     key: 'POST /reports/{id}/status',
@@ -169,11 +187,15 @@ describe('createOperationStateHandler', () => {
       }),
       {
         params: { id: '1' },
-        body: { id: 'wrong', status: 'started' },
+        body: { id: 'wrong', status: 'started', notes: 'should-not-project' },
       }
     );
 
-    expect(res.body).toEqual({ id: '1', status: 'started' });
+    expect(res.body).toEqual({
+      id: '1',
+      status: 'started',
+      notes: 'should-not-project',
+    });
     expect(await store.findById('releases', '1')).toEqual({
       id: '1',
       name: 'v1',

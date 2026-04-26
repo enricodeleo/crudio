@@ -25,6 +25,17 @@ function buildStateBody(...parts) {
   return Object.assign({}, ...parts.map(asObject));
 }
 
+function extractProjectableFields(operation) {
+  const status = operation.canonicalResponse?.status;
+  const contentType = operation.canonicalResponse?.contentType;
+  if (!status || !contentType) return [];
+
+  const schema =
+    operation.operation?.responses?.[String(status)]?.content?.[contentType]?.schema ?? null;
+
+  return Object.keys(schema?.properties ?? {});
+}
+
 function applyHeaders(res, headers = {}) {
   if (Object.keys(headers).length > 0 && typeof res.set === 'function') {
     res.set(headers);
@@ -32,6 +43,7 @@ function applyHeaders(res, headers = {}) {
 }
 
 async function maybeProject({
+  operation,
   storage,
   resource,
   operationConfig,
@@ -41,6 +53,8 @@ async function maybeProject({
 }) {
   if (!projectionEligible) return;
   if (operationConfig.mode !== 'auto' && operationConfig.mode !== 'resource-aware') return;
+  const projectableFields = extractProjectableFields(operation);
+  if (projectableFields.length === 0) return;
 
   // TODO(stage3): validate against canonicalResponse schema
   await projectResourceState({
@@ -48,6 +62,7 @@ async function maybeProject({
     resource,
     resourceId: req.params?.[resource?.idParam],
     body,
+    projectableFields,
   });
 }
 
@@ -90,7 +105,15 @@ export function createOperationStateHandler({
 
           // TODO(stage3): validate against canonicalResponse schema
           await storage.writeOperationState(operation.key, scopeKey, state);
-          await maybeProject({ storage, resource, operationConfig, projectionEligible, req, body });
+          await maybeProject({
+            operation,
+            storage,
+            resource,
+            operationConfig,
+            projectionEligible,
+            req,
+            body,
+          });
           return res.status(state.status).json(state.body);
         }
 
@@ -110,7 +133,15 @@ export function createOperationStateHandler({
 
           // TODO(stage3): validate against canonicalResponse schema
           await storage.writeOperationState(operation.key, scopeKey, state);
-          await maybeProject({ storage, resource, operationConfig, projectionEligible, req, body });
+          await maybeProject({
+            operation,
+            storage,
+            resource,
+            operationConfig,
+            projectionEligible,
+            req,
+            body,
+          });
           return res.status(state.status).json(state.body);
         }
 

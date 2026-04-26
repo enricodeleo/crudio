@@ -5,10 +5,12 @@ import { inferResources } from './openapi/inferResources.js';
 import { normalize } from './openapi/schemaResolver.js';
 import { buildOperationRegistry } from './http/buildOperationRegistry.js';
 import { createOperationHandler } from './http/createOperationHandler.js';
+import { createOperationStateHandler } from './http/createOperationStateHandler.js';
 import { createValidators } from './http/validators.js';
 import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
 import { JsonStateStore } from './storage/jsonStateStore.js';
+import { seedOperationState } from './seed/operationSeedEngine.js';
 import { seedAll } from './seed/seedEngine.js';
 
 export async function createApp({
@@ -23,7 +25,9 @@ export async function createApp({
   const spec = await loadSpec(specPath);
   const operations = compileOperations(spec);
   const inferredResources = inferResources(operations);
+  const crudResources = inferredResources.filter(isCrudResource);
   const storage = new JsonStateStore(dataDir);
+  const routes = buildOperationRegistry(operations, crudResources, operationConfig);
 
   await storage.writeRegistry({
     operations: operations.map(({ key, method, openApiPath, operationId }) => ({
@@ -37,7 +41,7 @@ export async function createApp({
   const engines = new Map();
   const validators = new Map();
 
-  for (const resource of inferredResources) {
+  for (const resource of crudResources) {
     const normalizedSchema = normalize(resource.schema, resource.name);
     const idSchema = resource.idSchema ?? null;
 
@@ -53,35 +57,40 @@ export async function createApp({
   }
 
   if (shouldSeed(seed, effectiveResourceConfig)) {
-    const normalizedResources = inferredResources.map((r) => ({
+    const normalizedResources = crudResources.map((r) => ({
       ...r,
       schema: normalize(r.schema, r.name),
     }));
     const engineMap = new Map(
-      inferredResources.map((r) => [r.name, engines.get(r.name).engine])
+      crudResources.map((r) => [r.name, engines.get(r.name).engine])
     );
     await seedAll(normalizedResources, engineMap, { count: seed }, effectiveResourceConfig);
   }
 
-  const routes = buildOperationRegistry(operations, inferredResources, operationConfig);
+  await seedOperationState({
+    registry: routes,
+    storage,
+  });
+
   const app = express();
 
   app.use(express.json());
 
   app.get('/_crudio/health', (req, res) => {
-    res.json({ status: 'ok', resources: inferredResources.map((r) => r.name) });
+    res.json({ status: 'ok', resources: crudResources.map((r) => r.name) });
   });
 
   for (const route of routes) {
-    const { engine } = engines.get(route.resource.name);
-    const v = validators.get(route.resource.name);
-    const handler = createOperationHandler({
-      operation: route.operation,
-      crudOperation: route.crudOperation,
-      resource: route.resource,
-      engine,
-      validators: v,
-    });
+    const handler =
+      route.routeKind === 'resource'
+        ? createResourceRouteHandler(route, engines, validators)
+        : createOperationStateHandler({
+            operation: route.operation,
+            storage,
+            operationConfig: route.operationConfig,
+            projectionEligible: route.projectionEligible,
+            resource: route.resource,
+          });
     app[route.method.toLowerCase()](route.path, handler);
   }
 
@@ -119,4 +128,21 @@ function mergeResourceConfig(resourceConfig = {}, seedPerResource = {}) {
 function shouldSeed(seed, resourceConfig = {}) {
   if (seed !== undefined) return true;
   return Object.values(resourceConfig).some((config) => config?.seed?.count !== undefined);
+}
+
+function isCrudResource(resource) {
+  return resource.collectionPath !== resource.itemPath;
+}
+
+function createResourceRouteHandler(route, engines, validators) {
+  const { engine } = engines.get(route.resource.name);
+  const v = validators.get(route.resource.name);
+
+  return createOperationHandler({
+    operation: route.operation,
+    crudOperation: route.crudOperation,
+    resource: route.resource,
+    engine,
+    validators: v,
+  });
 }

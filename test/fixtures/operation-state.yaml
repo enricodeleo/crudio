@@ -1,0 +1,196 @@
+openapi: "3.0.3"
+info:
+  title: Operation State Fixture
+  version: "1.0"
+paths:
+  /countries/{code}/summary:
+    get:
+      operationId: getCountrySummary
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Country summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - code
+                  - status
+                properties:
+                  code:
+                    type: string
+                  status:
+                    type: string
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /releases:
+    get:
+      operationId: listReleases
+      responses:
+        "200":
+          description: Release list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Release"
+    post:
+      operationId: createRelease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewRelease"
+      responses:
+        "201":
+          description: Created release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+  /releases/{id}:
+    get:
+      operationId: getReleaseById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+    put:
+      operationId: updateRelease
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Release"
+      responses:
+        "200":
+          description: Updated release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Release"
+  /releases/{id}/start:
+    post:
+      operationId: startRelease
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+      responses:
+        "200":
+          description: Started release
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  status:
+                    type: string
+  /reports/{id}/publish:
+    post:
+      operationId: publishReport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Published
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      required:
+        - token
+        - role
+      properties:
+        token:
+          type: string
+        role:
+          type: string
+    NewRelease:
+      type: object
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+    Release:
+      allOf:
+        - $ref: "#/components/schemas/NewRelease"
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer

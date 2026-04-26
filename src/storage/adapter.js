@@ -25,6 +25,7 @@ export class StorageAdapter {
 
   // Empty scope ('') is the concrete scope for path-less operations.
   // Default state is a separate fallback template, not the same entry.
+  // Read paths are lookup-only and must not register or persist metadata.
   async readOperationState(operationKey, scopeKey) {
     throw new Error('Not implemented');
   }
@@ -37,6 +38,7 @@ export class StorageAdapter {
     throw new Error('Not implemented');
   }
 
+  // Lookup-only; missing state returns null without creating registry metadata.
   async readOperationDefaultState(operationKey) {
     throw new Error('Not implemented');
   }

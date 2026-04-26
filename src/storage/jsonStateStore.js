@@ -49,10 +49,21 @@ export class JsonStateStore extends StorageAdapter {
   }
 
   #ensureOperationHash(operationKey) {
+    const existingHash = this.#lookupOperationHash(operationKey);
+    if (existingHash) return existingHash;
+
     const hash = this.#hashOperationKey(operationKey);
     const registry = this.#readRegistry();
     const operationStateHashes = { ...(registry.operationStateHashes ?? {}) };
-    const registeredKey = operationStateHashes[hash];
+    operationStateHashes[hash] = operationKey;
+    this.#writeRegistryFile({ ...registry, operationStateHashes });
+    return hash;
+  }
+
+  #lookupOperationHash(operationKey) {
+    const hash = this.#hashOperationKey(operationKey);
+    const registry = this.#readRegistry();
+    const registeredKey = registry.operationStateHashes?.[hash];
     if (registeredKey && registeredKey !== operationKey) {
       throw new Error(
         `Operation state hash collision for "${operationKey}" and "${registeredKey}" (${hash}).`
@@ -60,25 +71,26 @@ export class JsonStateStore extends StorageAdapter {
     }
 
     const file = this.operationPath(hash);
-    if (existsSync(file)) {
-      const record = JSON.parse(readFileSync(file, 'utf8'));
-      if (record.operationKey !== operationKey) {
-        throw new Error(
-          `Operation state hash collision for "${operationKey}" and "${record.operationKey}" (${hash}).`
-        );
-      }
+    if (!existsSync(file)) {
+      return registeredKey ? hash : null;
     }
 
-    if (!registeredKey) {
-      operationStateHashes[hash] = operationKey;
-      this.#writeRegistryFile({ ...registry, operationStateHashes });
+    const record = JSON.parse(readFileSync(file, 'utf8'));
+    if (record.operationKey !== operationKey) {
+      throw new Error(
+        `Operation state hash collision for "${operationKey}" and "${record.operationKey}" (${hash}).`
+      );
     }
 
     return hash;
   }
 
-  #readOperationRecord(operationKey) {
-    const hash = this.#ensureOperationHash(operationKey);
+  #readOperationRecord(operationKey, { register = false } = {}) {
+    const hash = register
+      ? this.#ensureOperationHash(operationKey)
+      : this.#lookupOperationHash(operationKey);
+    if (!hash) return null;
+
     const file = this.operationPath(hash);
     if (!existsSync(file)) {
       return {
@@ -153,19 +165,23 @@ export class JsonStateStore extends StorageAdapter {
   }
 
   async readOperationState(operationKey, scopeKey) {
-    const { record } = this.#readOperationRecord(operationKey);
+    const entry = this.#readOperationRecord(operationKey);
+    if (!entry) return null;
+    const { record } = entry;
     return record.scopes[scopeKey] ?? null;
   }
 
   async writeOperationState(operationKey, scopeKey, state) {
-    const { hash, record } = this.#readOperationRecord(operationKey);
+    const { hash, record } = this.#readOperationRecord(operationKey, { register: true });
     record.scopes[scopeKey] = state;
     this.#writeOperationRecord(hash, record);
     return state;
   }
 
   async deleteOperationState(operationKey, scopeKey) {
-    const { hash, record } = this.#readOperationRecord(operationKey);
+    const entry = this.#readOperationRecord(operationKey);
+    if (!entry) return false;
+    const { hash, record } = entry;
     if (!(scopeKey in record.scopes)) return false;
     delete record.scopes[scopeKey];
     this.#writeOperationRecord(hash, record);
@@ -173,12 +189,14 @@ export class JsonStateStore extends StorageAdapter {
   }
 
   async readOperationDefaultState(operationKey) {
-    const { record } = this.#readOperationRecord(operationKey);
+    const entry = this.#readOperationRecord(operationKey);
+    if (!entry) return null;
+    const { record } = entry;
     return record.defaultState ?? null;
   }
 
   async writeOperationDefaultState(operationKey, state) {
-    const { hash, record } = this.#readOperationRecord(operationKey);
+    const { hash, record } = this.#readOperationRecord(operationKey, { register: true });
     record.defaultState = state;
     this.#writeOperationRecord(hash, record);
     return state;

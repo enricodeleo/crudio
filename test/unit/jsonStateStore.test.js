@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -105,6 +105,33 @@ describe('JsonStateStore', () => {
     });
   });
 
+  it('does not create registry metadata when reading unseen operation state', async () => {
+    const registryFile = join(testDir, '_meta', 'registry.json');
+
+    expect(await store.readOperationState('GET /countries/{code}/summary', 'code=IT')).toBeNull();
+    expect(await store.readOperationDefaultState('GET /countries/{code}/summary')).toBeNull();
+    expect(await store.deleteOperationState('GET /countries/{code}/summary', 'code=IT')).toBe(false);
+    expect(existsSync(registryFile)).toBe(false);
+  });
+
+  it('preserves operation state hashes when writing the registry after persisting operation state', async () => {
+    await store.writeOperationState('GET /countries/{code}/summary', 'code=IT', {
+      status: 200,
+      body: { code: 'IT', status: 'ready' },
+      headers: {},
+    });
+
+    const registryFile = join(testDir, '_meta', 'registry.json');
+    const registryBefore = JSON.parse(readFileSync(registryFile, 'utf8'));
+
+    await store.writeRegistry({ operations: [{ key: 'GET /countries/{code}/summary' }] });
+
+    expect(JSON.parse(readFileSync(registryFile, 'utf8'))).toEqual({
+      operations: [{ key: 'GET /countries/{code}/summary' }],
+      operationStateHashes: registryBefore.operationStateHashes,
+    });
+  });
+
   it('round-trips the empty scope key for path-less operations', async () => {
     await store.writeOperationState('POST /auth/login', '', {
       status: 200,
@@ -119,5 +146,44 @@ describe('JsonStateStore', () => {
       body: { token: 'demo' },
       headers: {},
     });
+  });
+
+  it('throws loudly on operation state hash collisions', async () => {
+    vi.resetModules();
+    vi.doMock('node:crypto', async () => {
+      const actual = await vi.importActual('node:crypto');
+      return {
+        ...actual,
+        createHash() {
+          return {
+            update() {
+              return this;
+            },
+            digest() {
+              return 'collision-hash-value';
+            },
+          };
+        },
+      };
+    });
+
+    try {
+      const { JsonStateStore: MockedJsonStateStore } = await import(
+        '../../src/storage/jsonStateStore.js'
+      );
+      const collisionDir = mkdtempSync(join(tmpdir(), 'crudio-collision-'));
+
+      try {
+        const collisionStore = new MockedJsonStateStore(collisionDir);
+        await collisionStore.writeOperationState('GET /alpha', '', { status: 200 });
+        await expect(collisionStore.writeOperationState('GET /beta', '', { status: 200 })).rejects
+          .toThrow(/Operation state hash collision/);
+      } finally {
+        rmSync(collisionDir, { recursive: true, force: true });
+      }
+    } finally {
+      vi.doUnmock('node:crypto');
+      vi.resetModules();
+    }
   });
 });

@@ -7,6 +7,12 @@ const CRUD_ROUTE_MAP = {
   delete: { method: 'DELETE', path: 'item' },
 };
 
+const DEFAULT_OPERATION_CONFIG = {
+  enabled: true,
+  mode: 'auto',
+  querySensitive: false,
+};
+
 function resolveOperationConfig(operation, operationsConfig = {}) {
   const byOperationId = operation.operationId ? operationsConfig[operation.operationId] : undefined;
   const byKey = operationsConfig[operation.key];
@@ -17,13 +23,13 @@ function resolveOperationConfig(operation, operationsConfig = {}) {
     );
   }
 
-  return byOperationId ?? byKey ?? {};
+  return {
+    ...DEFAULT_OPERATION_CONFIG,
+    ...(byOperationId ?? byKey ?? {}),
+  };
 }
 
-export function buildOperationRegistry(operations, resources, operationsConfig = {}) {
-  const byKey = new Map(operations.map((operation) => [operation.key, operation]));
-  const registry = [];
-
+function getCrudClaim(operation, resources) {
   for (const resource of resources) {
     for (const crudOperation of resource.methods) {
       const route = CRUD_ROUTE_MAP[crudOperation];
@@ -31,20 +37,110 @@ export function buildOperationRegistry(operations, resources, operationsConfig =
 
       const openApiPath =
         route.path === 'collection' ? resource.collectionPath : resource.itemPath;
-      const operation = byKey.get(`${route.method} ${openApiPath}`);
-      if (!operation) continue;
 
-      const operationConfig = resolveOperationConfig(operation, operationsConfig);
-      if (operationConfig.enabled === false) continue;
-
-      registry.push({
-        method: operation.method,
-        path: operation.expressPath,
-        crudOperation,
-        operation,
-        resource,
-      });
+      if (operation.key === `${route.method} ${openApiPath}`) {
+        return { crudOperation, resource };
+      }
     }
+  }
+
+  return null;
+}
+
+function extractCanonicalResponseSchema(operation) {
+  if (operation.canonicalResponse?.schema) return operation.canonicalResponse.schema;
+
+  const status = operation.canonicalResponse?.status;
+  const contentType = operation.canonicalResponse?.contentType;
+  if (!status || !contentType) return null;
+
+  return operation.operation.responses?.[String(status)]?.content?.[contentType]?.schema ?? null;
+}
+
+function isObjectShapedSchema(schema) {
+  return schema?.type === 'object' && typeof schema.properties === 'object' && schema.properties !== null;
+}
+
+function areSchemasCompatible(projectedSchema, resourceSchema) {
+  if (!projectedSchema || !resourceSchema) return false;
+
+  const projectedType = projectedSchema.type;
+  const resourceType = resourceSchema.type;
+
+  if (!projectedType || !resourceType) return true;
+  return projectedType === resourceType;
+}
+
+function isProjectionSubset(responseSchema, resourceSchema) {
+  const responseProperties = responseSchema.properties ?? {};
+  const resourceProperties = resourceSchema.properties ?? {};
+
+  return Object.entries(responseProperties).every(([propertyName, propertySchema]) => {
+    const resourceProperty = resourceProperties[propertyName];
+    return resourceProperty && areSchemasCompatible(propertySchema, resourceProperty);
+  });
+}
+
+function getProjectionCandidate(operation, resources) {
+  for (const resource of resources) {
+    if (!operation.openApiPath.startsWith(`${resource.itemPath}/`)) continue;
+    if (!resource.idParam || !operation.pathParams.includes(resource.idParam)) continue;
+
+    const responseSchema = extractCanonicalResponseSchema(operation);
+    if (!isObjectShapedSchema(responseSchema)) {
+      return { resource, projectionEligible: false };
+    }
+
+    if (!isObjectShapedSchema(resource.schema)) {
+      return { resource, projectionEligible: false };
+    }
+
+    return {
+      resource,
+      projectionEligible: isProjectionSubset(responseSchema, resource.schema),
+    };
+  }
+
+  return { resource: null, projectionEligible: false };
+}
+
+export function buildOperationRegistry(
+  operations,
+  resources,
+  operationsConfig = {},
+  options = {}
+) {
+  const warn = options.warn ?? console.warn;
+  const registry = [];
+
+  for (const operation of operations) {
+    const operationConfig = resolveOperationConfig(operation, operationsConfig);
+    if (operationConfig.enabled === false) continue;
+
+    const crudClaim = getCrudClaim(operation, resources);
+    const projection = crudClaim ? { resource: null, projectionEligible: false } : getProjectionCandidate(operation, resources);
+
+    const routeKind = crudClaim ? 'resource' : 'operation-state';
+    const projectionEligible = crudClaim ? false : projection.projectionEligible;
+    const resource = crudClaim?.resource ?? projection.resource ?? null;
+    const crudOperation = crudClaim?.crudOperation ?? null;
+
+    if (!crudClaim && operationConfig.mode === 'resource-aware' && !projectionEligible) {
+      warn(
+        `resource-aware mode for "${operation.key}" failed build-time projection checks and was downgraded to operation-state.`
+      );
+    }
+
+    registry.push({
+      method: operation.method,
+      path: operation.expressPath,
+      routeKind,
+      crudOperation,
+      operation,
+      resource,
+      operationConfig,
+      projectionEligible,
+    });
   }
 
   return registry;

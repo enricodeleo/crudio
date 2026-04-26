@@ -84,4 +84,60 @@ describe('loadConfig', () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('normalizes Stage 2 operation config fields from a config file', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-operation-config');
+    mkdirSync(tmpDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        operations: {
+          'GET /countries/{code}/summary': {
+            querySensitive: true,
+            seed: {
+              default: { status: 'unavailable' },
+              scopes: {
+                'code=IT&locale=it': { code: 'IT', status: 'ready' },
+              },
+            },
+          },
+          'POST /sessions': {},
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: configFile,
+      });
+
+      expect(config.operations['GET /countries/{code}/summary']).toEqual({
+        enabled: true,
+        mode: 'auto',
+        querySensitive: true,
+        seed: {
+          default: { status: 'unavailable' },
+          scopes: {
+            'code=IT&locale=it': { code: 'IT', status: 'ready' },
+          },
+        },
+      });
+      expect(config.operations['POST /sessions']).toEqual({
+        enabled: true,
+        mode: 'auto',
+        querySensitive: false,
+        seed: {
+          default: undefined,
+          scopes: {},
+        },
+      });
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

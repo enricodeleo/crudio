@@ -21,6 +21,12 @@ function normalizeOperationConfig(operationConfig = {}) {
       {
         ...config,
         enabled: config.enabled ?? true,
+        mode: config.mode ?? 'auto',
+        querySensitive: config.querySensitive ?? false,
+        seed: {
+          default: config.seed?.default,
+          scopes: config.seed?.scopes ?? {},
+        },
       },
     ])
   );

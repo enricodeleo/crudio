@@ -140,4 +140,45 @@ describe('loadConfig', () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('preserves explicit operation overrides and unrelated fields during normalization', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-operation-overrides');
+    mkdirSync(tmpDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        operations: {
+          'GET /countries/{code}/summary': {
+            enabled: false,
+            mode: 'resource-aware',
+            handler: './handlers/country-summary.js',
+          },
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: configFile,
+      });
+
+      expect(config.operations['GET /countries/{code}/summary']).toEqual({
+        enabled: false,
+        mode: 'resource-aware',
+        handler: './handlers/country-summary.js',
+        querySensitive: false,
+        seed: {
+          default: undefined,
+          scopes: {},
+        },
+      });
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

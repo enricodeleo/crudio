@@ -61,17 +61,43 @@ function isObjectShapedSchema(schema) {
   return schema?.type === 'object' && typeof schema.properties === 'object' && schema.properties !== null;
 }
 
+function isArrayShapedSchema(schema) {
+  return schema?.type === 'array' && !!schema.items;
+}
+
 function areSchemasCompatible(projectedSchema, resourceSchema) {
   if (!projectedSchema || !resourceSchema) return false;
 
   const projectedType = projectedSchema.type;
   const resourceType = resourceSchema.type;
 
+  if (projectedType && resourceType && projectedType !== resourceType) return false;
+
+  if (projectedType === 'object' || resourceType === 'object') {
+    if (!isObjectShapedSchema(projectedSchema) || !isObjectShapedSchema(resourceSchema)) {
+      return false;
+    }
+
+    return isProjectionSubset(projectedSchema, resourceSchema);
+  }
+
+  if (projectedType === 'array' || resourceType === 'array') {
+    if (!isArrayShapedSchema(projectedSchema) || !isArrayShapedSchema(resourceSchema)) {
+      return false;
+    }
+
+    return areSchemasCompatible(projectedSchema.items, resourceSchema.items);
+  }
+
   if (!projectedType || !resourceType) return true;
   return projectedType === resourceType;
 }
 
 function isProjectionSubset(responseSchema, resourceSchema) {
+  if (!isObjectShapedSchema(responseSchema) || !isObjectShapedSchema(resourceSchema)) {
+    return false;
+  }
+
   const responseProperties = responseSchema.properties ?? {};
   const resourceProperties = resourceSchema.properties ?? {};
 

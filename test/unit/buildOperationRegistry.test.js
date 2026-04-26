@@ -162,6 +162,70 @@ const operations = [
       },
     },
   },
+  {
+    key: 'GET /releases/{id}/details',
+    method: 'GET',
+    openApiPath: '/releases/{id}/details',
+    expressPath: '/releases/:id/details',
+    operationId: 'getReleaseDetails',
+    pathParams: ['id'],
+    requestBodySchema: null,
+    canonicalResponse: {
+      status: 200,
+      contentType: 'application/json',
+      schema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          metadata: {
+            type: 'object',
+            properties: {
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    operation: {
+      responses: {
+        '200': {
+          description: 'ok',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  metadata: {
+                    type: 'object',
+                    properties: {
+                      tags: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            label: { type: 'string' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 ];
 
 const resources = [
@@ -190,6 +254,20 @@ const resources = [
         id: { type: 'string' },
         status: { type: 'string' },
         notes: { type: 'string' },
+        metadata: {
+          type: 'object',
+          properties: {
+            tags: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  label: { type: 'integer' },
+                },
+              },
+            },
+          },
+        },
       },
     },
     methods: ['getById'],
@@ -269,6 +347,23 @@ describe('buildOperationRegistry', () => {
       routeKind: 'operation-state',
       resource: resources[1],
       projectionEligible: true,
+      operationConfig: {
+        enabled: true,
+        mode: 'auto',
+        querySensitive: false,
+      },
+    });
+  });
+
+  it('marks descendant operations projection-ineligible when nested object and array shapes differ', () => {
+    const entry = buildOperationRegistry(operations, resources, {
+      getReleaseDetails: { mode: 'auto' },
+    }).find((route) => route.operation.key === 'GET /releases/{id}/details');
+
+    expect(entry).toMatchObject({
+      routeKind: 'operation-state',
+      resource: resources[1],
+      projectionEligible: false,
       operationConfig: {
         enabled: true,
         mode: 'auto',

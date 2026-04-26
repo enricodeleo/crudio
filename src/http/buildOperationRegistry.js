@@ -140,8 +140,8 @@ export function buildOperationRegistry(
   const registry = [];
 
   for (const operation of operations) {
-    const operationConfig = resolveOperationConfig(operation, operationsConfig);
-    if (operationConfig.enabled === false) continue;
+    const requestedOperationConfig = resolveOperationConfig(operation, operationsConfig);
+    if (requestedOperationConfig.enabled === false) continue;
 
     const crudClaim = getCrudClaim(operation, resources);
     const projection = crudClaim ? { resource: null, projectionEligible: false } : getProjectionCandidate(operation, resources);
@@ -150,8 +150,18 @@ export function buildOperationRegistry(
     const projectionEligible = crudClaim ? false : projection.projectionEligible;
     const resource = crudClaim?.resource ?? projection.resource ?? null;
     const crudOperation = crudClaim?.crudOperation ?? null;
+    const operationConfig =
+      !crudClaim &&
+      requestedOperationConfig.mode === 'resource-aware' &&
+      !projectionEligible
+        ? { ...requestedOperationConfig, mode: 'operation-state' }
+        : requestedOperationConfig;
 
-    if (!crudClaim && operationConfig.mode === 'resource-aware' && !projectionEligible) {
+    if (
+      !crudClaim &&
+      requestedOperationConfig.mode === 'resource-aware' &&
+      !projectionEligible
+    ) {
       warn(
         `resource-aware mode for "${operation.key}" failed build-time projection checks and was downgraded to operation-state.`
       );

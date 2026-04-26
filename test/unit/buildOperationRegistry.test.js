@@ -330,7 +330,7 @@ describe('buildOperationRegistry', () => {
       projectionEligible: false,
       operationConfig: {
         enabled: true,
-        mode: 'resource-aware',
+        mode: 'operation-state',
         querySensitive: false,
       },
     });

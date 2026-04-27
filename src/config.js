@@ -1,3 +1,5 @@
+import { dirname } from 'node:path';
+
 function normalizeResourceConfig(resourceConfig = {}) {
   return Object.fromEntries(
     Object.entries(resourceConfig).map(([resourceName, config]) => [
@@ -46,5 +48,6 @@ export async function loadConfig(args) {
     resources: normalizeResourceConfig(fileConfig.resources ?? {}),
     operations: normalizeOperationConfig(fileConfig.operations ?? {}),
     validateResponses: fileConfig.validateResponses ?? 'warn',
+    handlerBaseDir: args.config ? dirname(args.config) : process.cwd(),
   };
 }

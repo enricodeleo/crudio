@@ -14,6 +14,7 @@ describe('loadConfig', () => {
     expect(config.resources).toEqual({});
     expect(config.operations).toEqual({});
     expect(config.validateResponses).toBe('warn');
+    expect(config.handlerBaseDir).toBe(process.cwd());
   });
 
   it('overrides defaults with CLI args', async () => {
@@ -80,6 +81,41 @@ describe('loadConfig', () => {
       expect(config.operations['GET /pets'].enabled).toBe(true);
       expect(config.seed.count).toBe(10);
       expect(config.validateResponses).toBe('warn');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves inline handlers and records the config directory as handlerBaseDir', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-handler-config');
+    mkdirSync(tmpDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        operations: {
+          'POST /sessions': {
+            handler: async () => ({ status: 200, body: { ok: true }, headers: {} }),
+          },
+          'GET /sessions': {
+            handler: './handlers/loginHandler.js',
+          },
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: configFile,
+      });
+
+      expect(typeof config.operations['POST /sessions'].handler).toBe('function');
+      expect(config.operations['GET /sessions'].handler).toBe('./handlers/loginHandler.js');
+      expect(config.handlerBaseDir).toBe(tmpDir);
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

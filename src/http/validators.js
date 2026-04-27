@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import { ValidationError } from './errors.js';
 
 export function createValidators(schema) {
   const ajv = new Ajv({ allErrors: true, strict: false });
@@ -46,4 +47,64 @@ export function createValidators(schema) {
   }
 
   return { validateBody, validateCreate, validatePatch, parseQuery };
+}
+
+export function createOperationRequestValidator({ routeKind, crudOperation, validators } = {}) {
+  if (routeKind !== 'resource' || !validators) {
+    return null;
+  }
+
+  const validate =
+    crudOperation === 'create'
+      ? validators.validateCreate
+      : crudOperation === 'patch'
+        ? validators.validatePatch
+        : crudOperation === 'update'
+          ? validators.validateBody
+          : null;
+
+  if (!validate) {
+    return null;
+  }
+
+  return (body) => {
+    const result = validate(body);
+    if (!result.valid) {
+      throw new ValidationError(result.errors);
+    }
+  };
+}
+
+export function createOperationResponseValidator(operation, mode = 'warn') {
+  if (mode === 'off') {
+    return null;
+  }
+
+  const status = operation?.canonicalResponse?.status;
+  const contentType = operation?.canonicalResponse?.contentType;
+  const schema =
+    status && contentType
+      ? operation?.operation?.responses?.[String(status)]?.content?.[contentType]?.schema
+      : null;
+
+  if (!schema) {
+    return null;
+  }
+
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const validate = ajv.compile(schema);
+
+  return (body) => {
+    const valid = validate(body);
+    if (valid) {
+      return;
+    }
+
+    const message = `Response validation failed for ${operation.key}`;
+    if (mode === 'strict') {
+      throw new Error(message);
+    }
+
+    console.warn(message, validate.errors ?? []);
+  };
 }

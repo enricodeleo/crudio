@@ -9,6 +9,8 @@ There are two runtime classes:
 - `resource` routes: CRUD-shaped operations backed by shared resource state
 - `operation-state` routes: every other operation, backed by persisted per-operation state
 
+Any route can also be wrapped or replaced by a custom JavaScript handler from `crudio.config.js`.
+
 ## CRUD-Shaped Routes
 
 When the spec exposes a collection/item pair like `/pets` and `/pets/{id}`, Crudio derives a shared resource and wires whichever CRUD methods are present.
@@ -98,6 +100,34 @@ Request bodies are validated against OpenAPI schemas using AJV.
 | CRUD `PUT` | Full resource schema including required fields |
 | CRUD `PATCH` | Partial schema with only provided fields checked |
 | Operation-state routes | No request validator yet beyond Express JSON parsing |
+| Custom handlers on CRUD routes | Same built-in CRUD request validation before the handler runs |
+
+Response validation is also available for custom handlers and built-in routes through `validateResponses`.
+
+## Custom Handler Contract
+
+Custom handlers return a descriptor:
+
+```js
+{ status, body, headers }
+```
+
+or use the helper:
+
+```js
+return ctx.json(200, { ok: true });
+```
+
+Available `ctx` members:
+
+- `req`
+- `state`
+- `resources`
+- `storage`
+- `json()`
+- `nextDefault()`
+
+`nextDefault()` can be called at most once and returns the built-in descriptor for that route, whether the route is CRUD-backed or operation-state.
 
 **Error response** (`400`)
 

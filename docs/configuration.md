@@ -32,6 +32,8 @@ export default {
     count: 10,
   },
 
+  validateResponses: 'warn',
+
   resources: {
     users: {
       foreignKeys: {
@@ -53,11 +55,18 @@ export default {
         },
       },
     },
+    createPet: {
+      handler: async (ctx) => {
+        const created = await ctx.nextDefault();
+        return ctx.json(created.status, { ...created.body, source: 'custom' });
+      },
+    },
     'POST /auth/login': {
       enabled: false,
     },
     startRelease: {
       mode: 'resource-aware',
+      handler: './handlers/startRelease.js',
       seed: {
         scopes: {
           'id=1': { status: 'started' },
@@ -82,6 +91,7 @@ Crudio does not extend OpenAPI. Per-operation and per-resource behavior the spec
 | `dataDir` | `string` | Storage directory |
 | `seed.count` | `number` | Default CRUD seed count |
 | `seed.strategy` | `'config-first' \| 'examples-first' \| 'fakes-only'` | Parsed config field reserved for future resource-seeding policy |
+| `validateResponses` | `'strict' \| 'warn' \| 'off'` | Response validation policy for built-in routes and custom handlers |
 
 `--seed N` maps only to `seed.count`. Per-resource and per-operation seeding must come from config.
 
@@ -130,11 +140,32 @@ operations: {
 |--------|------|---------|-------------|
 | `enabled` | `boolean` | `true` | Disable a single route when `false` |
 | `mode` | `'auto' \| 'operation-state' \| 'resource-aware'` | `'auto'` | State resolution mode for non-CRUD operations |
+| `handler` | `Function \| string` | — | Inline custom handler or module path resolved relative to the config file |
 | `querySensitive` | `boolean` | `false` | Include all present query params in the operation scope key |
 | `seed.default` | `object` | — | Default response-shaped state for that operation |
 | `seed.scopes` | `Record<string, object>` | `{}` | Explicit scope-keyed response-shaped state |
 
 `mode` applies only to non-CRUD operations. CRUD-claimed operations always use shared resource state.
+
+### Custom Handler Contract
+
+`handler` can be:
+
+- an inline async function
+- a module path like `'./handlers/startRelease.js'`
+
+Module paths are resolved relative to the config file location. For direct `createApp()` usage without `loadConfig()`, relative handler paths resolve from `process.cwd()`.
+
+The handler context exposes:
+
+- `ctx.req`
+- `ctx.state`
+- `ctx.resources`
+- `ctx.storage`
+- `ctx.json(status, body, headers?)`
+- `ctx.nextDefault()`
+
+`ctx.nextDefault()` runs the built-in runtime once and returns its descriptor so you can wrap or replace it.
 
 ### Mode Semantics
 

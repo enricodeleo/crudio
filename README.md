@@ -87,9 +87,41 @@ curl -X POST http://localhost:3000/pets \
 3. **Infer** — detects CRUD resource pairs from path patterns (`/users` + `/users/{id}`)
 4. **Validate** — compiles AJV validators from your CRUD resource schemas for strict request checking
 5. **Route** — registers Express routes for every operation defined in the spec
-6. **Persist** — stores CRUD-backed resources and operation-state payloads in JSON files
+6. **Adapt** — optionally wraps any operation with a custom JavaScript handler
+7. **Persist** — stores CRUD-backed resources and operation-state payloads in JSON files
 
 CRUD-shaped operations share resource state. Everything else is served as operation-state: the response body is persisted per operation scope and replayed on later reads, with optional projection into a parent resource when the response schema is a compatible subset.
+
+## Custom Handlers
+
+When the generic runtime is not enough, you can override or wrap any operation with JavaScript in `crudio.config.js`.
+
+```js
+export default {
+  operations: {
+    createPet: {
+      handler: async (ctx) => {
+        const created = await ctx.nextDefault();
+        return ctx.json(created.status, { ...created.body, source: 'custom' });
+      },
+    },
+    startRelease: {
+      handler: './handlers/startRelease.js',
+    },
+  },
+};
+```
+
+Available `ctx` helpers:
+
+- `ctx.req` — normalized `params`, `query`, `body`, `headers`
+- `ctx.state` — read/write operation-state for the current scope
+- `ctx.resources` — CRUD helpers over inferred resources
+- `ctx.storage` — raw storage access
+- `ctx.json(status, body, headers?)` — return a normalized response descriptor
+- `ctx.nextDefault()` — run the built-in runtime once, then wrap or replace it
+
+Custom handlers work on both CRUD and non-CRUD routes. CRUD request validation still runs before the handler, and response validation follows `validateResponses`.
 
 ## Supported / Unsupported
 

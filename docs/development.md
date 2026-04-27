@@ -48,9 +48,16 @@ crudio/
 │   │   └── jsonStateStore.js  # JSON resource + operation-state persistence
 │   ├── http/
 │   │   ├── buildOperationRegistry.js # Full operation registry
-│   │   ├── createOperationHandler.js # CRUD-backed request handlers
-│   │   ├── createOperationStateHandler.js # Non-CRUD operation-state handlers
-│   │   ├── validators.js      # AJV validation
+│   │   ├── executeCrudOperation.js # Descriptor-based CRUD executor
+│   │   ├── executeOperationStateOperation.js # Descriptor-based operation-state executor
+│   │   ├── createCustomHandlerAdapter.js # Unified custom-handler wrapper
+│   │   ├── buildHandlerStateHelpers.js # ctx.state helper factory
+│   │   ├── buildHandlerResourceHelpers.js # ctx.resources helper factory
+│   │   ├── loadCustomHandler.js # Inline/module handler resolution
+│   │   ├── responseDescriptor.js # Descriptor helpers + Express response writer
+│   │   ├── createOperationHandler.js # Thin CRUD wrapper over descriptor executor
+│   │   ├── createOperationStateHandler.js # Thin operation-state wrapper over descriptor executor
+│   │   ├── validators.js      # AJV validation + operation-level validator hooks
 │   │   └── errors.js          # Error classes
 │   ├── operations/
 │   │   ├── projectResourceState.js # Safe projection into parent resources
@@ -76,11 +83,13 @@ Each module has a single responsibility and no cross-cutting dependencies:
 - **`openapi/`** — spec loading, schema resolution, full operation compilation, CRUD inference
 - **`engine/`** — pure CRUD logic with no HTTP awareness
 - **`storage/`** — persistence interface and namespaced JSON storage for resources and operations
-- **`http/`** — operation registry, CRUD handlers, operation-state handlers, validation, error handling
+- **`http/`** — operation registry, descriptor executors, custom-handler adapter, validation, error handling
 - **`operations/`** — scope key construction and safe resource projection helpers
 - **`seed/`** — fake data generation plus resource and operation-state seeding
 
 `compileOperations()` is the bootstrap source of truth. `inferResources()` derives only the CRUD-backed subset from that operation list; everything else is mounted as operation-state. `CrudEngine` never touches HTTP or Express, and non-CRUD state persistence goes through `StorageAdapter` instead of the engine layer.
+
+Stage 3 adds a unified custom-handler adapter above both route kinds. Built-in CRUD and operation-state behavior now run as descriptor-based executors, so custom handlers can call `nextDefault()` and still let the runtime validate, persist, and project through one consistent contract.
 
 ## Adding a Storage Adapter
 

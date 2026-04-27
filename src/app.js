@@ -4,9 +4,19 @@ import { compileOperations } from './openapi/compileOperations.js';
 import { inferResources } from './openapi/inferResources.js';
 import { normalize } from './openapi/schemaResolver.js';
 import { buildOperationRegistry } from './http/buildOperationRegistry.js';
-import { createOperationHandler } from './http/createOperationHandler.js';
-import { createOperationStateHandler } from './http/createOperationStateHandler.js';
-import { createValidators } from './http/validators.js';
+import { buildScopeKey } from './operations/scopeKey.js';
+import { buildHandlerResourceHelpers } from './http/buildHandlerResourceHelpers.js';
+import { buildHandlerStateHelpers } from './http/buildHandlerStateHelpers.js';
+import { createCustomHandlerAdapter } from './http/createCustomHandlerAdapter.js';
+import { executeCrudOperation } from './http/executeCrudOperation.js';
+import { executeOperationStateOperation } from './http/executeOperationStateOperation.js';
+import { loadCustomHandler } from './http/loadCustomHandler.js';
+import {
+  createOperationRequestValidator,
+  createOperationResponseValidator,
+  createValidators,
+} from './http/validators.js';
+import { sendDescriptor } from './http/responseDescriptor.js';
 import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
 import { JsonStateStore } from './storage/jsonStateStore.js';
@@ -20,6 +30,8 @@ export async function createApp({
   operations: operationConfig = {},
   seed,
   seedPerResource,
+  handlerBaseDir = process.cwd(),
+  validateResponses = 'warn',
 }) {
   const effectiveResourceConfig = mergeResourceConfig(resourceConfig, seedPerResource);
   const spec = await loadSpec(specPath);
@@ -67,6 +79,8 @@ export async function createApp({
     await seedAll(normalizedResources, engineMap, { count: seed }, effectiveResourceConfig);
   }
 
+  const resources = buildHandlerResourceHelpers(engines);
+
   await seedOperationState({
     registry: routes,
     storage,
@@ -81,17 +95,69 @@ export async function createApp({
   });
 
   for (const route of routes) {
-    const handler =
+    const customHandler = await loadCustomHandler(route.operationConfig.handler, handlerBaseDir);
+    const requestValidator =
       route.routeKind === 'resource'
-        ? createResourceRouteHandler(route, engines, validators)
-        : createOperationStateHandler({
+        ? createOperationRequestValidator({
+            routeKind: route.routeKind,
+            crudOperation: route.crudOperation,
+            validators: validators.get(route.resource.name),
+          })
+        : null;
+    const responseValidator = createOperationResponseValidator(route.operation, validateResponses);
+    const defaultExecutor = ({ req }) =>
+      route.routeKind === 'resource'
+        ? executeCrudOperation({
+            operation: route.operation,
+            crudOperation: route.crudOperation,
+            resource: route.resource,
+            engine: engines.get(route.resource.name).engine,
+            validators: validators.get(route.resource.name),
+            req,
+          })
+        : executeOperationStateOperation({
             operation: route.operation,
             storage,
             operationConfig: route.operationConfig,
             projectionEligible: route.projectionEligible,
             resource: route.resource,
+            req,
           });
-    app[route.method.toLowerCase()](route.path, handler);
+
+    const execute = createCustomHandlerAdapter({
+      operation: route.operation,
+      operationConfig: route.operationConfig,
+      customHandler,
+      defaultExecutor,
+      requestValidator,
+      responseValidator,
+      resources,
+      stateFactory: (req) =>
+        buildHandlerStateHelpers(
+          storage,
+          route.operation.key,
+          buildScopeKey(
+            route.operationConfig.querySensitive ? { ...req.params, ...req.query } : { ...req.params }
+          )
+        ),
+      storage,
+    });
+
+    app[route.method.toLowerCase()](route.path, async (req, res, next) => {
+      try {
+        const descriptor = await execute({
+          req: {
+            params: req.params,
+            query: req.query,
+            body: req.body,
+            headers: req.headers,
+          },
+        });
+        return sendDescriptor(res, descriptor);
+      } catch (err) {
+        next(err);
+      }
+    });
   }
 
   app.use((req, res) => {
@@ -132,17 +198,4 @@ function shouldSeed(seed, resourceConfig = {}) {
 
 function isCrudResource(resource) {
   return resource.collectionPath !== resource.itemPath;
-}
-
-function createResourceRouteHandler(route, engines, validators) {
-  const { engine } = engines.get(route.resource.name);
-  const v = validators.get(route.resource.name);
-
-  return createOperationHandler({
-    operation: route.operation,
-    crudOperation: route.crudOperation,
-    resource: route.resource,
-    engine,
-    validators: v,
-  });
 }

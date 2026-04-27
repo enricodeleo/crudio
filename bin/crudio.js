@@ -39,6 +39,8 @@ async function main() {
     operations: config.operations,
     seed: config.seed.count,
     seedPerResource: toLegacySeedPerResource(config.resources),
+    handlerBaseDir: config.handlerBaseDir,
+    validateResponses: config.validateResponses,
   });
 
   const server = app.listen(config.port, () => {

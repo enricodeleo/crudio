@@ -1,4 +1,5 @@
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function normalizeResourceConfig(resourceConfig = {}) {
   return Object.fromEntries(
@@ -35,7 +36,14 @@ function normalizeOperationConfig(operationConfig = {}) {
 }
 
 export async function loadConfig(args) {
-  const fileConfig = args.config ? (await import(args.config)).default : {};
+  const resolvedConfigPath = args.config
+    ? isAbsolute(args.config)
+      ? args.config
+      : resolve(process.cwd(), args.config)
+    : null;
+  const fileConfig = resolvedConfigPath
+    ? (await import(pathToFileURL(resolvedConfigPath).href)).default
+    : {};
 
   return {
     specPath: args.specPath,
@@ -48,6 +56,6 @@ export async function loadConfig(args) {
     resources: normalizeResourceConfig(fileConfig.resources ?? {}),
     operations: normalizeOperationConfig(fileConfig.operations ?? {}),
     validateResponses: fileConfig.validateResponses ?? 'warn',
-    handlerBaseDir: args.config ? dirname(args.config) : process.cwd(),
+    handlerBaseDir: resolvedConfigPath ? dirname(resolvedConfigPath) : process.cwd(),
   };
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadConfig } from '../../src/config.js';
+import { loadCustomHandler } from '../../src/http/loadCustomHandler.js';
 
 describe('loadConfig', () => {
   it('returns defaults with no args', async () => {
@@ -116,6 +117,59 @@ describe('loadConfig', () => {
       expect(typeof config.operations['POST /sessions'].handler).toBe('function');
       expect(config.operations['GET /sessions'].handler).toBe('./handlers/loginHandler.js');
       expect(config.handlerBaseDir).toBe(tmpDir);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves a relative config path from the current working directory', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join, relative, resolve } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-relative-config');
+    const handlersDir = join(tmpDir, 'handlers');
+    mkdirSync(tmpDir, { recursive: true });
+    mkdirSync(handlersDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    const handlerFile = join(handlersDir, 'loginHandler.js');
+    writeFileSync(
+      handlerFile,
+      `
+      export default async function loginHandler() {
+        return { status: 200, body: { token: 'relative-config-token' }, headers: {} };
+      }
+      `
+    );
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        port: 3210,
+        operations: {
+          login: {
+            handler: './handlers/loginHandler.js',
+          },
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: relative(process.cwd(), configFile),
+      });
+      const handler = await loadCustomHandler(
+        config.operations.login.handler,
+        config.handlerBaseDir
+      );
+
+      expect(config.port).toBe(3210);
+      expect(config.operations.login.handler).toBe('./handlers/loginHandler.js');
+      expect(config.handlerBaseDir).toBe(resolve(tmpDir));
+      await expect(handler()).resolves.toEqual({
+        status: 200,
+        body: { token: 'relative-config-token' },
+        headers: {},
+      });
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

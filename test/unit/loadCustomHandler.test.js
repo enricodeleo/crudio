@@ -16,9 +16,10 @@ describe('loadCustomHandler', () => {
   });
 
   it('throws on invalid configured handler types', async () => {
-    await expect(loadCustomHandler(42, process.cwd())).rejects.toBeInstanceOf(
-      StartupConfigurationError
-    );
+    await expect(loadCustomHandler(42, process.cwd())).rejects.toMatchObject({
+      name: 'StartupConfigurationError',
+      message: expect.stringMatching(/function or module path string/i),
+    });
   });
 
   it('loads a module handler relative to the provided base dir', async () => {
@@ -27,14 +28,16 @@ describe('loadCustomHandler', () => {
   });
 
   it('throws when the module has no default function export', async () => {
-    await expect(loadCustomHandler('./handlers/invalidExport.js', FIXTURE_BASE_DIR)).rejects.toBeInstanceOf(
-      StartupConfigurationError
-    );
+    await expect(loadCustomHandler('./handlers/invalidExport.js', FIXTURE_BASE_DIR)).rejects.toMatchObject({
+      name: 'StartupConfigurationError',
+      message: expect.stringMatching(/default function/i),
+    });
   });
 
   it('throws when the module path cannot be imported', async () => {
-    await expect(loadCustomHandler('./handlers/missingHandler.js', FIXTURE_BASE_DIR)).rejects.toBeInstanceOf(
-      StartupConfigurationError
-    );
+    await expect(loadCustomHandler('./handlers/missingHandler.js', FIXTURE_BASE_DIR)).rejects.toMatchObject({
+      name: 'StartupConfigurationError',
+      message: expect.stringMatching(/failed to import custom handler module/i),
+    });
   });
 });

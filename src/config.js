@@ -1,5 +1,6 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { normalizeDeclarativeRules } from './http/normalizeDeclarativeRules.js';
 
 function normalizeResourceConfig(resourceConfig = {}) {
   return Object.fromEntries(
@@ -26,6 +27,7 @@ function normalizeOperationConfig(operationConfig = {}) {
         enabled: config.enabled ?? true,
         mode: config.mode ?? 'auto',
         querySensitive: config.querySensitive ?? false,
+        rules: normalizeDeclarativeRules(config.rules),
         seed: {
           default: config.seed?.default,
           scopes: config.seed?.scopes ?? {},

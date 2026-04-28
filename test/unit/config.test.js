@@ -271,4 +271,77 @@ describe('loadConfig', () => {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('normalizes declarative rules and allows them to coexist with handlers at config load time', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-rules-config');
+    mkdirSync(tmpDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        operations: {
+          startRelease: {
+            handler: './handlers/startRelease.js',
+            rules: [
+              {
+                name: 'start',
+                if: { eq: [{ ref: 'req.body.action' }, 'start'] },
+                then: {
+                  writeState: {
+                    status: { ref: 'req.body.action' },
+                  },
+                  respond: {
+                    status: 200,
+                    body: {
+                      status: { ref: 'req.body.action' },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: configFile,
+      });
+
+      expect(config.operations.startRelease).toEqual({
+        enabled: true,
+        mode: 'auto',
+        handler: './handlers/startRelease.js',
+        querySensitive: false,
+        rules: [
+          {
+            name: 'start',
+            if: { eq: [{ ref: 'req.body.action' }, 'start'] },
+            then: {
+              writeState: {
+                status: { ref: 'req.body.action' },
+              },
+              respond: {
+                status: 200,
+                body: {
+                  status: { ref: 'req.body.action' },
+                },
+              },
+            },
+          },
+        ],
+        seed: {
+          default: undefined,
+          scopes: {},
+        },
+      });
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -21,6 +21,16 @@ describe('buildHandlerStateHelpers', () => {
       body: { token: 'demo' },
       headers: {},
     });
+    await state.setDescriptor({
+      status: 201,
+      body: { token: 'descriptor' },
+      headers: { 'x-source': 'rule' },
+    });
+    expect(storage.writeOperationState).toHaveBeenCalledWith('POST /auth/login', '', {
+      status: 201,
+      body: { token: 'descriptor' },
+      headers: { 'x-source': 'rule' },
+    });
     await state.delete();
     expect(storage.deleteOperationState).toHaveBeenCalledWith('POST /auth/login', '');
     expect(await state.getDefault()).toBeNull();
@@ -51,6 +61,10 @@ describe('buildHandlerResourceHelpers', () => {
     expect(await resources.update('pets', 1, { name: 'Max' })).toEqual({ id: 1, name: 'Max' });
     expect(await resources.patch('pets', 1, { enabled: true })).toEqual({ id: 1, enabled: true });
     expect(await resources.delete('pets', 1)).toBe(true);
+    expect(await resources.getLinked({ name: 'pets', idParam: 'petId' }, { petId: 1 })).toEqual({
+      id: 1,
+      name: 'Rex',
+    });
 
     expect(engine.getById).toHaveBeenCalledWith(1);
     expect(engine.list).toHaveBeenCalledWith({ limit: 1 });

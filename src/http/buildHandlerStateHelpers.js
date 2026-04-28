@@ -1,6 +1,12 @@
 export function buildHandlerStateHelpers(storage, operationKey, scopeKey) {
   return {
     get: async () => (await storage.readOperationState(operationKey, scopeKey))?.body ?? null,
+    setDescriptor: async (descriptor) =>
+      storage.writeOperationState(operationKey, scopeKey, {
+        status: descriptor.status,
+        body: descriptor.body,
+        headers: descriptor.headers ?? {},
+      }),
     set: async (body, options = {}) =>
       storage.writeOperationState(operationKey, scopeKey, {
         status: options.status ?? 200,

@@ -1,12 +1,15 @@
+import { executeDeclarativeRuleSet } from './executeDeclarativeRuleSet.js';
 import { assertValidDescriptor, json } from './responseDescriptor.js';
 
 export function createCustomHandlerAdapter({
   operation,
+  declarativeRules,
   customHandler,
   defaultExecutor,
   requestValidator,
   responseValidator,
   resources,
+  resourceCurrentFactory,
   stateFactory,
   storage,
 }) {
@@ -15,20 +18,52 @@ export function createCustomHandlerAdapter({
       requestValidator(req.body);
     }
 
-    let defaultExecution = null;
-
-    if (!customHandler) {
-      defaultExecution = await defaultExecutor({ req });
+    const state = stateFactory ? stateFactory(req) : undefined;
+    const runDefault = async () => {
+      const defaultExecution = await defaultExecutor({ req });
       const descriptor = defaultExecution.descriptor;
       if (responseValidator) {
         responseValidator(descriptor.body);
       }
       await defaultExecution.commit?.(descriptor);
       return descriptor;
+    };
+
+    if (declarativeRules?.length) {
+      const resourceCurrent = resourceCurrentFactory ? await resourceCurrentFactory(req) : null;
+      const ruleExecution = await executeDeclarativeRuleSet({
+        operation,
+        rules: declarativeRules,
+        req,
+        state,
+        resourceCurrent,
+      });
+
+      if (ruleExecution.matched) {
+        const descriptor = ruleExecution.descriptor;
+        if (responseValidator) {
+          responseValidator(descriptor.body);
+        }
+        await ruleExecution.commit?.(descriptor);
+        return descriptor;
+      }
+
+      if (customHandler) {
+        throw new Error(
+          `Declarative rules and handler both configured for "${operation?.key ?? 'unknown operation'}", but no rule matched.`
+        );
+      }
+
+      return runDefault();
+    }
+
+    let defaultExecution = null;
+
+    if (!customHandler) {
+      return runDefault();
     }
 
     let consumed = false;
-    const state = stateFactory ? stateFactory(req) : undefined;
     const ctx = {
       operation,
       req,

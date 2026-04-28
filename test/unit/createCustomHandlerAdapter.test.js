@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCustomHandlerAdapter } from '../../src/http/createCustomHandlerAdapter.js';
 
+function createRuleState(overrides = {}) {
+  return {
+    get: vi.fn().mockResolvedValue(null),
+    getDefault: vi.fn().mockResolvedValue(null),
+    setDescriptor: vi.fn().mockResolvedValue(),
+    ...overrides,
+  };
+}
+
 describe('createCustomHandlerAdapter', () => {
   it('uses the default executor unchanged when no custom handler exists', async () => {
     const defaultExecutor = vi.fn().mockResolvedValue({
@@ -80,5 +89,186 @@ describe('createCustomHandlerAdapter', () => {
       /invalid response/
     );
     expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('uses declarative rules before the built-in runtime when a rule matches', async () => {
+    const defaultExecutor = vi.fn().mockResolvedValue({
+      descriptor: { status: 200, body: { source: 'default' }, headers: {} },
+      commit: vi.fn(),
+    });
+    const state = createRuleState();
+    const handler = createCustomHandlerAdapter({
+      operation: {
+        key: 'POST /reports/{id}/publish',
+        canonicalResponse: { status: 200 },
+      },
+      declarativeRules: [
+        {
+          name: 'publish',
+          if: { eq: [{ ref: 'req.body.status' }, 'published'] },
+          then: {
+            writeState: {
+              id: { ref: 'req.params.id' },
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 202,
+              body: { ref: 'state.current' },
+            },
+          },
+        },
+      ],
+      defaultExecutor,
+      stateFactory: () => state,
+      resourceCurrentFactory: async () => null,
+    });
+
+    const result = await handler({
+      req: {
+        params: { id: '42' },
+        query: {},
+        body: { status: 'published' },
+        headers: {},
+      },
+    });
+
+    expect(result).toEqual({
+      status: 202,
+      body: { id: '42', status: 'published' },
+      headers: {},
+    });
+    expect(defaultExecutor).not.toHaveBeenCalled();
+    expect(state.setDescriptor).toHaveBeenCalledWith(result);
+  });
+
+  it('falls back to the built-in runtime when rules exist but none match and no JS handler is configured', async () => {
+    const commit = vi.fn();
+    const defaultExecutor = vi.fn().mockResolvedValue({
+      descriptor: { status: 200, body: { source: 'default' }, headers: {} },
+      commit,
+    });
+    const state = createRuleState();
+    const handler = createCustomHandlerAdapter({
+      operation: {
+        key: 'POST /reports/{id}/publish',
+        canonicalResponse: { status: 200 },
+      },
+      declarativeRules: [
+        {
+          name: 'publish',
+          if: { eq: [{ ref: 'req.body.status' }, 'published'] },
+          then: {
+            respond: {
+              status: 202,
+              body: { source: 'rules' },
+            },
+          },
+        },
+      ],
+      defaultExecutor,
+      stateFactory: () => state,
+      resourceCurrentFactory: async () => null,
+    });
+
+    const result = await handler({
+      req: {
+        params: { id: '42' },
+        query: {},
+        body: { status: 'draft' },
+        headers: {},
+      },
+    });
+
+    expect(result).toEqual({
+      status: 200,
+      body: { source: 'default' },
+      headers: {},
+    });
+    expect(defaultExecutor).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledWith(result);
+  });
+
+  it('lets matching rules win over a configured JS handler', async () => {
+    const customHandler = vi.fn(async (ctx) => ctx.json(200, { source: 'handler' }));
+    const state = createRuleState();
+    const handler = createCustomHandlerAdapter({
+      operation: {
+        key: 'POST /reports/{id}/publish',
+        canonicalResponse: { status: 200 },
+      },
+      declarativeRules: [
+        {
+          name: 'publish',
+          then: {
+            respond: {
+              status: 201,
+              body: { source: 'rules' },
+            },
+          },
+        },
+      ],
+      customHandler,
+      defaultExecutor: vi.fn(),
+      stateFactory: () => state,
+      resourceCurrentFactory: async () => null,
+    });
+
+    const result = await handler({
+      req: {
+        params: { id: '42' },
+        query: {},
+        body: { status: 'published' },
+        headers: {},
+      },
+    });
+
+    expect(result).toEqual({
+      status: 201,
+      body: { source: 'rules' },
+      headers: {},
+    });
+    expect(customHandler).not.toHaveBeenCalled();
+  });
+
+  it('throws an explicit error when rules and JS handler coexist but no rule matches', async () => {
+    const customHandler = vi.fn(async (ctx) => ctx.json(200, { source: 'handler' }));
+    const defaultExecutor = vi.fn();
+    const state = createRuleState();
+    const handler = createCustomHandlerAdapter({
+      operation: {
+        key: 'POST /reports/{id}/publish',
+        canonicalResponse: { status: 200 },
+      },
+      declarativeRules: [
+        {
+          name: 'publish',
+          if: { eq: [{ ref: 'req.body.status' }, 'published'] },
+          then: {
+            respond: {
+              status: 201,
+              body: { source: 'rules' },
+            },
+          },
+        },
+      ],
+      customHandler,
+      defaultExecutor,
+      stateFactory: () => state,
+      resourceCurrentFactory: async () => null,
+    });
+
+    await expect(
+      handler({
+        req: {
+          params: { id: '42' },
+          query: {},
+          body: { status: 'draft' },
+          headers: {},
+        },
+      })
+    ).rejects.toThrow(/rules.*handler.*no rule matched/i);
+
+    expect(customHandler).not.toHaveBeenCalled();
+    expect(defaultExecutor).not.toHaveBeenCalled();
   });
 });

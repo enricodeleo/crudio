@@ -87,14 +87,52 @@ curl -X POST http://localhost:3000/pets \
 3. **Infer** — detects CRUD resource pairs from path patterns (`/users` + `/users/{id}`)
 4. **Validate** — compiles AJV validators from your CRUD resource schemas for strict request checking
 5. **Route** — registers Express routes for every operation defined in the spec
-6. **Adapt** — optionally wraps any operation with a custom JavaScript handler
+6. **Adapt** — optionally applies declarative rules or wraps an operation with a custom JavaScript handler
 7. **Persist** — stores CRUD-backed resources and operation-state payloads in JSON files
 
 CRUD-shaped operations share resource state. Everything else is served as operation-state: the response body is persisted per operation scope and replayed on later reads, with optional projection into a parent resource when the response schema is a compatible subset.
 
+## Declarative Rules
+
+For many non-trivial endpoints you can stay in config and avoid JavaScript entirely.
+
+```js
+export default {
+  operations: {
+    login: {
+      rules: [
+        {
+          name: 'admin-login',
+          if: { eq: [{ ref: 'req.body.email' }, 'ada@example.com'] },
+          then: {
+            writeState: {
+              token: 'mock-token',
+              role: 'admin',
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'state.current' },
+            },
+          },
+        },
+      ],
+    },
+  },
+};
+```
+
+Stage 4 rules are:
+
+- `first match wins`
+- limited to `eq`, `exists`, and `in`
+- limited to `writeState`, `mergeState`, and `respond`
+- operation-state only for writes in `v1`
+
+If a route has `rules` and no rule matches, Crudio falls back to the built-in runtime. If a route has both `rules` and a JS `handler`, no-match is an explicit `500` instead of a silent handler fallback.
+
 ## Custom Handlers
 
-When the generic runtime is not enough, you can override or wrap any operation with JavaScript in `crudio.config.js`.
+When declarative rules are not enough, you can override or wrap any operation with JavaScript in `crudio.config.js`.
 
 ```js
 export default {
@@ -121,7 +159,7 @@ Available `ctx` helpers:
 - `ctx.json(status, body, headers?)` — return a normalized response descriptor
 - `ctx.nextDefault()` — run the built-in runtime once, then wrap or replace it
 
-Custom handlers work on both CRUD and non-CRUD routes. CRUD request validation still runs before the handler, and response validation follows `validateResponses`.
+Custom handlers work on both CRUD and non-CRUD routes. CRUD request validation still runs before the handler, and response validation follows `validateResponses`. When `rules` and `handler` coexist on the same operation, rules run first.
 
 ## Supported / Unsupported
 

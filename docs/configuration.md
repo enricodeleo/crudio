@@ -46,6 +46,24 @@ export default {
   },
 
   operations: {
+    login: {
+      rules: [
+        {
+          name: 'admin-login',
+          if: { eq: [{ ref: 'req.body.email' }, 'ada@example.com'] },
+          then: {
+            writeState: {
+              token: 'mock-token',
+              role: 'admin',
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'state.current' },
+            },
+          },
+        },
+      ],
+    },
     'GET /countries/{code}/summary': {
       querySensitive: true,
       seed: {
@@ -91,7 +109,7 @@ Crudio does not extend OpenAPI. Per-operation and per-resource behavior the spec
 | `dataDir` | `string` | Storage directory |
 | `seed.count` | `number` | Default CRUD seed count |
 | `seed.strategy` | `'config-first' \| 'examples-first' \| 'fakes-only'` | Parsed config field reserved for future resource-seeding policy |
-| `validateResponses` | `'strict' \| 'warn' \| 'off'` | Response validation policy for built-in routes and custom handlers |
+| `validateResponses` | `'strict' \| 'warn' \| 'off'` | Response validation policy for built-in routes, declarative rules, and custom handlers |
 
 `--seed N` maps only to `seed.count`. Per-resource and per-operation seeding must come from config.
 
@@ -140,6 +158,7 @@ operations: {
 |--------|------|---------|-------------|
 | `enabled` | `boolean` | `true` | Disable a single route when `false` |
 | `mode` | `'auto' \| 'operation-state' \| 'resource-aware'` | `'auto'` | State resolution mode for non-CRUD operations |
+| `rules` | `Array<object>` | — | Ordered declarative rules evaluated before built-in runtime and JS handlers |
 | `handler` | `Function \| string` | — | Inline custom handler or module path resolved relative to the config file |
 | `querySensitive` | `boolean` | `false` | Include all present query params in the operation scope key |
 | `seed.default` | `object` | — | Default response-shaped state for that operation |
@@ -166,6 +185,48 @@ The handler context exposes:
 - `ctx.nextDefault()`
 
 `ctx.nextDefault()` runs the built-in runtime once and returns its descriptor so you can wrap or replace it.
+
+### Declarative Rules
+
+`rules` is an ordered array. Stage 4 supports:
+
+- predicates: `eq`, `exists`, `in`
+- effects: `writeState`, `mergeState`, `respond`
+- refs from `req.params`, `req.query`, `req.body`, `state.current`, `state.default`, and `resource.current`
+
+Example:
+
+```js
+operations: {
+  updateRelease: {
+    rules: [
+      {
+        name: 'preview-update',
+        if: { eq: [{ ref: 'resource.current.status' }, 'draft'] },
+        then: {
+          writeState: {
+            id: { ref: 'resource.current.id' },
+            name: { ref: 'resource.current.name' },
+            status: { ref: 'req.body.status' },
+          },
+          respond: {
+            status: 200,
+            body: { ref: 'state.current' },
+          },
+        },
+      },
+    ],
+  },
+}
+```
+
+Semantics:
+
+- first matching rule wins
+- missing refs do not throw; they make the predicate/effect path no-match
+- `rules` without a match fall back to the built-in runtime
+- `rules` plus `handler` without a match return an explicit runtime error
+- Stage 4 writes only current operation state; declarative rules do not mutate CRUD resources directly in `v1`
 
 ### Mode Semantics
 

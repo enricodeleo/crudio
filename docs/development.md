@@ -48,6 +48,10 @@ crudio/
 │   │   └── jsonStateStore.js  # JSON resource + operation-state persistence
 │   ├── http/
 │   │   ├── buildOperationRegistry.js # Full operation registry
+│   │   ├── normalizeDeclarativeRules.js # Startup validation for operations.<key>.rules
+│   │   ├── resolveRuleRef.js   # Declarative ref resolver with found/not-found sentinel
+│   │   ├── evaluateRulePredicate.js # eq / exists / in predicate evaluator
+│   │   ├── executeDeclarativeRuleSet.js # Declarative rules executor with deferred commit
 │   │   ├── executeCrudOperation.js # Descriptor-based CRUD executor
 │   │   ├── executeOperationStateOperation.js # Descriptor-based operation-state executor
 │   │   ├── createCustomHandlerAdapter.js # Unified custom-handler wrapper
@@ -90,6 +94,8 @@ Each module has a single responsibility and no cross-cutting dependencies:
 `compileOperations()` is the bootstrap source of truth. `inferResources()` derives only the CRUD-backed subset from that operation list; everything else is mounted as operation-state. `CrudEngine` never touches HTTP or Express, and non-CRUD state persistence goes through `StorageAdapter` instead of the engine layer.
 
 Stage 3 adds a unified custom-handler adapter above both route kinds. Built-in CRUD and operation-state behavior now run as descriptor-based executors, so custom handlers can call `nextDefault()` and still let the runtime validate, persist, and project through one consistent contract.
+
+Stage 4 layers declarative rules into that same adapter instead of creating a third runtime. `operations.<key>.rules` are normalized at startup, evaluated with `first match wins`, and either return a descriptor immediately or fall through to the same built-in/custom-handler lifecycle.
 
 ## Adding a Storage Adapter
 

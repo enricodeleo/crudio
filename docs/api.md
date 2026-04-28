@@ -9,7 +9,7 @@ There are two runtime classes:
 - `resource` routes: CRUD-shaped operations backed by shared resource state
 - `operation-state` routes: every other operation, backed by persisted per-operation state
 
-Any route can also be wrapped or replaced by a custom JavaScript handler from `crudio.config.js`.
+Any route can also be controlled by declarative rules or wrapped/replaced by a custom JavaScript handler from `crudio.config.js`.
 
 ## CRUD-Shaped Routes
 
@@ -102,7 +102,25 @@ Request bodies are validated against OpenAPI schemas using AJV.
 | Operation-state routes | No request validator yet beyond Express JSON parsing |
 | Custom handlers on CRUD routes | Same built-in CRUD request validation before the handler runs |
 
-Response validation is also available for custom handlers and built-in routes through `validateResponses`.
+Response validation is also available for declarative rules, custom handlers, and built-in routes through `validateResponses`.
+
+## Declarative Rules Contract
+
+Declarative rules run inside the same descriptor-based lifecycle as built-in routes and custom handlers.
+
+Stage 4 supports:
+
+- predicates: `eq`, `exists`, `in`
+- effects: `writeState`, `mergeState`, `respond`
+- refs from `req.params`, `req.query`, `req.body`, `state.current`, `state.default`, and `resource.current`
+
+Precedence:
+
+- `rules only`: first match wins, otherwise built-in fallback
+- `handler only`: Stage 3 custom-handler behavior
+- `rules + handler`: matching rule wins; no-match is an explicit `500`
+
+Stage 4 declarative writes are operation-state only. Rules may read a linked CRUD resource snapshot, but they do not mutate CRUD resources directly.
 
 ## Custom Handler Contract
 

@@ -1,4 +1,5 @@
 import { executeDeclarativeRuleSet } from './executeDeclarativeRuleSet.js';
+import { CrudioError } from './errors.js';
 import { assertValidDescriptor, json } from './responseDescriptor.js';
 
 export function createCustomHandlerAdapter({
@@ -49,7 +50,7 @@ export function createCustomHandlerAdapter({
       }
 
       if (customHandler) {
-        throw new Error(
+        throw new CrudioError(
           `Declarative rules and handler both configured for "${operation?.key ?? 'unknown operation'}", but no rule matched.`
         );
       }

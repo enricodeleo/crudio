@@ -127,11 +127,15 @@ export async function createApp({
     const execute = createCustomHandlerAdapter({
       operation: route.operation,
       operationConfig: route.operationConfig,
+      declarativeRules: route.operationConfig.rules,
       customHandler,
       defaultExecutor,
       requestValidator,
       responseValidator,
       resources,
+      resourceCurrentFactory: route.resource
+        ? (req) => resources.getLinked(route.resource, req.params)
+        : undefined,
       stateFactory: (req) =>
         buildHandlerStateHelpers(
           storage,

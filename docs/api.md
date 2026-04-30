@@ -108,10 +108,10 @@ Response validation is also available for declarative rules, custom handlers, an
 
 Declarative rules run inside the same descriptor-based lifecycle as built-in routes and custom handlers.
 
-Stage 4 supports:
+Stage 5 supports:
 
 - predicates: `eq`, `exists`, `in`
-- effects: `writeState`, `mergeState`, `respond`
+- effects: `writeState`, `mergeState`, `patchResource`, `respond`
 - refs from `req.params`, `req.query`, `req.body`, `state.current`, `state.default`, and `resource.current`
 
 Precedence:
@@ -120,7 +120,7 @@ Precedence:
 - `handler only`: Stage 3 custom-handler behavior
 - `rules + handler`: matching rule wins; no-match is an explicit `500`
 
-Stage 4 declarative writes are operation-state only. Rules may read a linked CRUD resource snapshot, but they do not mutate CRUD resources directly.
+`writeState` and `mergeState` still touch only current operation state. `patchResource` is limited to the inferred linked CRUD resource item for the current route, applies a shallow top-level patch, and exposes the post-patch snapshot through `resource.current` for the rest of the rule. If the linked item does not exist, the rule returns `404`.
 
 ## Custom Handler Contract
 

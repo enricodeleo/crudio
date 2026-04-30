@@ -97,6 +97,8 @@ Stage 3 adds a unified custom-handler adapter above both route kinds. Built-in C
 
 Stage 4 layers declarative rules into that same adapter instead of creating a third runtime. `operations.<key>.rules` are normalized at startup, evaluated with `first match wins`, and either return a descriptor immediately or fall through to the same built-in/custom-handler lifecycle.
 
+Stage 5 extends the declarative executor with `patchResource` for the inferred linked CRUD item only. The executor now builds a post-patch resource snapshot in memory, lets later effects read it through `resource.current`, and commits linked-resource patching before any operation-state write.
+
 ## Adding a Storage Adapter
 
 Implement the `StorageAdapter` interface:

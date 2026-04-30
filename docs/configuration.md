@@ -64,6 +64,25 @@ export default {
         },
       ],
     },
+    startRelease: {
+      rules: [
+        {
+          name: 'start-linked-release',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 200,
+              body: {
+                id: { ref: 'resource.current.id' },
+                status: { ref: 'resource.current.status' },
+              },
+            },
+          },
+        },
+      ],
+    },
     'GET /countries/{code}/summary': {
       querySensitive: true,
       seed: {
@@ -188,10 +207,10 @@ The handler context exposes:
 
 ### Declarative Rules
 
-`rules` is an ordered array. Stage 4 supports:
+`rules` is an ordered array. Stage 5 supports:
 
 - predicates: `eq`, `exists`, `in`
-- effects: `writeState`, `mergeState`, `respond`
+- effects: `writeState`, `mergeState`, `patchResource`, `respond`
 - refs from `req.params`, `req.query`, `req.body`, `state.current`, `state.default`, and `resource.current`
 
 Example:
@@ -226,7 +245,10 @@ Semantics:
 - missing refs do not throw; they make the predicate/effect path no-match
 - `rules` without a match fall back to the built-in runtime
 - `rules` plus `handler` without a match return an explicit runtime error
-- Stage 4 writes only current operation state; declarative rules do not mutate CRUD resources directly in `v1`
+- `writeState` and `mergeState` write only current operation state
+- `patchResource` may shallow-patch only the inferred linked CRUD resource item for the current route
+- after `patchResource`, `resource.current` is the post-patch snapshot for later effects in the same rule
+- if the linked resource item does not exist, the matched rule returns `404`
 
 ### Mode Semantics
 

@@ -121,14 +121,17 @@ export default {
 };
 ```
 
-Stage 4 rules are:
+Stage 5 rules are:
 
 - `first match wins`
 - limited to `eq`, `exists`, and `in`
-- limited to `writeState`, `mergeState`, and `respond`
-- operation-state only for writes in `v1`
+- limited to `writeState`, `mergeState`, `patchResource`, and `respond`
+- operation-state writes stay local to the current operation
+- `patchResource` can shallow-patch only the inferred linked CRUD resource item
 
 If a route has `rules` and no rule matches, Crudio falls back to the built-in runtime. If a route has both `rules` and a JS `handler`, no-match is an explicit `500` instead of a silent handler fallback.
+
+When `patchResource` runs, `resource.current` becomes the post-patch snapshot for the rest of that rule, so `respond` can return the updated linked resource without JavaScript. If the linked item does not exist, the rule returns `404`.
 
 ## Custom Handlers
 

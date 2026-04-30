@@ -139,6 +139,103 @@ describe('declarative rules integration', () => {
     });
   });
 
+  it('lets a non-CRUD rule patch the linked resource and respond from the post-patch snapshot', async () => {
+    const app = await buildApp({
+      startRelease: {
+        rules: [
+          {
+            name: 'start-linked-release',
+            then: {
+              patchResource: {
+                status: { ref: 'req.body.status' },
+              },
+              respond: {
+                status: 200,
+                body: {
+                  id: { ref: 'resource.current.id' },
+                  status: { ref: 'resource.current.status' },
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const created = await request(app, 'POST', '/releases', {
+      name: 'v1.0.0',
+      status: 'draft',
+    });
+    expect(created.status).toBe(201);
+
+    const started = await request(app, 'POST', '/releases/1/start', {
+      status: 'started',
+    });
+
+    expect(started.status).toBe(200);
+    expect(started.body).toEqual({
+      id: 1,
+      status: 'started',
+    });
+
+    const release = await request(app, 'GET', '/releases/1');
+    expect(release.status).toBe(200);
+    expect(release.body).toEqual({
+      id: 1,
+      name: 'v1.0.0',
+      status: 'started',
+    });
+  });
+
+  it('lets a CRUD item rule patch the linked resource and return the updated resource', async () => {
+    const app = await buildApp({
+      updateRelease: {
+        rules: [
+          {
+            name: 'patch-release',
+            then: {
+              patchResource: {
+                name: { ref: 'req.body.name' },
+                status: { ref: 'req.body.status' },
+              },
+              respond: {
+                status: 200,
+                body: { ref: 'resource.current' },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const created = await request(app, 'POST', '/releases', {
+      name: 'v1.0.0',
+      status: 'draft',
+    });
+    expect(created.status).toBe(201);
+
+    const updated = await request(app, 'PUT', '/releases/1', {
+      id: 1,
+      name: 'v2.0.0',
+      status: 'started',
+    });
+
+    expect(updated.status).toBe(200);
+    expect(updated.body).toEqual({
+      id: 1,
+      name: 'v2.0.0',
+      status: 'started',
+    });
+
+    const release = await request(app, 'GET', '/releases/1');
+    expect(release.status).toBe(200);
+    expect(release.body).toEqual({
+      id: 1,
+      name: 'v2.0.0',
+      status: 'started',
+    });
+  });
+
   it('returns an explicit error when rules and a JS handler coexist but no rule matches', async () => {
     const app = await buildApp({
       login: {

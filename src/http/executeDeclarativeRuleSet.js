@@ -55,6 +55,43 @@ function buildRuleContext(req, currentState, defaultState, resourceCurrent) {
   };
 }
 
+function buildMissingLinkedResourceDescriptor(resource, req) {
+  const id = resource?.idParam ? req.params?.[resource.idParam] : undefined;
+  return json(404, {
+    error: `Linked resource ${resource?.name ?? 'unknown'} with id ${id ?? 'unknown'} not found`,
+  });
+}
+
+function applyResourceEffects(rule, context) {
+  let nextResource = context.resource.current;
+  let patchPayload = null;
+  let touchesResource = false;
+
+  if ('patchResource' in rule.then) {
+    if (context.resource.current == null) {
+      return { found: true, missingLinkedResource: true };
+    }
+
+    const patch = materializeRuleValue(rule.then.patchResource, context);
+    if (!patch.found) return { found: false };
+
+    patchPayload = asObject(patch.value);
+    nextResource = {
+      ...asObject(context.resource.current),
+      ...patchPayload,
+    };
+    touchesResource = true;
+  }
+
+  return {
+    found: true,
+    touchesResource,
+    nextResource,
+    patchPayload,
+    missingLinkedResource: false,
+  };
+}
+
 function applyStateEffects(rule, context) {
   let nextState = context.state.current;
   let touchesState = false;
@@ -105,6 +142,8 @@ export async function executeDeclarativeRuleSet({
   rules,
   req,
   state,
+  resource = null,
+  resources = null,
   resourceCurrent = null,
 }) {
   const currentState = (await state.get()) ?? null;
@@ -117,7 +156,29 @@ export async function executeDeclarativeRuleSet({
       continue;
     }
 
-    const effectState = applyStateEffects(rule, initialContext);
+    const effectResource = applyResourceEffects(rule, initialContext);
+    if (!effectResource.found) {
+      continue;
+    }
+
+    if (effectResource.missingLinkedResource) {
+      const descriptor = buildMissingLinkedResourceDescriptor(resource, req);
+      return {
+        matched: true,
+        descriptor,
+        commit: async (finalDescriptor = descriptor) => finalDescriptor,
+      };
+    }
+
+    const resourceForState =
+      effectResource.touchesResource ? effectResource.nextResource : resourceCurrent;
+    const stateContext = buildRuleContext(
+      req,
+      currentState,
+      defaultState,
+      resourceForState
+    );
+    const effectState = applyStateEffects(rule, stateContext);
     if (!effectState.found) {
       continue;
     }
@@ -126,7 +187,7 @@ export async function executeDeclarativeRuleSet({
       req,
       effectState.touchesState ? effectState.nextState : currentState,
       defaultState,
-      resourceCurrent
+      resourceForState
     );
     const descriptorResult = buildDescriptor(rule.then.respond, responseContext, fallbackStatus);
     if (!descriptorResult.found) {
@@ -135,6 +196,12 @@ export async function executeDeclarativeRuleSet({
 
     const descriptor = descriptorResult.descriptor;
     const commit = async (finalDescriptor = descriptor) => {
+      if (effectResource.touchesResource) {
+        const patched = await resources.patchLinked(resource, req.params, effectResource.patchPayload);
+        if (patched == null) {
+          return buildMissingLinkedResourceDescriptor(resource, req);
+        }
+      }
       if (effectState.touchesState) {
         await state.setDescriptor(finalDescriptor);
       }

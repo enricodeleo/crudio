@@ -305,4 +305,251 @@ describe('executeDeclarativeRuleSet', () => {
     });
     expect(state.setDescriptor).not.toHaveBeenCalled();
   });
+
+  it('builds a post-patch linked resource snapshot before commit', async () => {
+    const { executeDeclarativeRuleSet } = await loadSubject();
+    const state = createState();
+    const resources = {
+      patchLinked: vi.fn().mockResolvedValue({
+        id: 'rel-1',
+        status: 'started',
+        metadata: { flags: ['fresh'] },
+      }),
+    };
+    const resourceCurrent = {
+      id: 'rel-1',
+      status: 'draft',
+      metadata: { stale: true },
+    };
+
+    const result = await executeDeclarativeRuleSet({
+      operation: {
+        key: 'POST /releases/{id}/start',
+        canonicalResponse: { status: 200 },
+      },
+      req: {
+        params: { id: 'rel-1' },
+        query: {},
+        body: {
+          status: 'started',
+          metadata: { flags: ['fresh'] },
+        },
+        headers: {},
+      },
+      rules: [
+        {
+          name: 'patch-linked-release',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+              metadata: { ref: 'req.body.metadata' },
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'resource.current' },
+            },
+          },
+        },
+      ],
+      state,
+      resources,
+      resource: { name: 'releases', idParam: 'id' },
+      resourceCurrent,
+    });
+
+    expect(result.descriptor).toEqual({
+      status: 200,
+      body: {
+        id: 'rel-1',
+        status: 'started',
+        metadata: { flags: ['fresh'] },
+      },
+      headers: {},
+    });
+    expect(resources.patchLinked).not.toHaveBeenCalled();
+    expect(resourceCurrent).toEqual({
+      id: 'rel-1',
+      status: 'draft',
+      metadata: { stale: true },
+    });
+  });
+
+  it('commits linked resource patch before writing operation state', async () => {
+    const { executeDeclarativeRuleSet } = await loadSubject();
+    const order = [];
+    const state = createState({
+      setDescriptor: vi.fn().mockImplementation(async () => {
+        order.push('state');
+      }),
+    });
+    const resources = {
+      patchLinked: vi.fn().mockImplementation(async () => {
+        order.push('patch');
+        return {
+          id: 'rel-1',
+          status: 'started',
+        };
+      }),
+    };
+
+    const result = await executeDeclarativeRuleSet({
+      operation: {
+        key: 'POST /releases/{id}/start',
+        canonicalResponse: { status: 200 },
+      },
+      req: {
+        params: { id: 'rel-1' },
+        query: {},
+        body: { status: 'started' },
+        headers: {},
+      },
+      rules: [
+        {
+          name: 'patch-and-write',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+            },
+            writeState: {
+              releaseId: { ref: 'req.params.id' },
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'state.current' },
+            },
+          },
+        },
+      ],
+      state,
+      resources,
+      resource: { name: 'releases', idParam: 'id' },
+      resourceCurrent: {
+        id: 'rel-1',
+        status: 'draft',
+      },
+    });
+
+    await result.commit();
+
+    expect(order).toEqual(['patch', 'state']);
+    expect(resources.patchLinked).toHaveBeenCalledWith(
+      { name: 'releases', idParam: 'id' },
+      { id: 'rel-1' },
+      { status: 'started' }
+    );
+    expect(state.setDescriptor).toHaveBeenCalledWith({
+      status: 200,
+      body: {
+        releaseId: 'rel-1',
+        status: 'started',
+      },
+      headers: {},
+    });
+  });
+
+  it('returns a 404 descriptor when patchResource targets a missing linked item', async () => {
+    const { executeDeclarativeRuleSet } = await loadSubject();
+    const state = createState();
+    const resources = {
+      patchLinked: vi.fn(),
+    };
+
+    const result = await executeDeclarativeRuleSet({
+      operation: {
+        key: 'POST /releases/{id}/start',
+        canonicalResponse: { status: 200 },
+      },
+      req: {
+        params: { id: 'missing' },
+        query: {},
+        body: { status: 'started' },
+        headers: {},
+      },
+      rules: [
+        {
+          name: 'missing-linked-release',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'resource.current' },
+            },
+          },
+        },
+      ],
+      state,
+      resources,
+      resource: { name: 'releases', idParam: 'id' },
+      resourceCurrent: null,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.descriptor).toEqual({
+      status: 404,
+      body: { error: 'Linked resource releases with id missing not found' },
+      headers: {},
+    });
+
+    await result.commit();
+    expect(resources.patchLinked).not.toHaveBeenCalled();
+    expect(state.setDescriptor).not.toHaveBeenCalled();
+  });
+
+  it('does not write operation state if the linked patch fails during commit', async () => {
+    const { executeDeclarativeRuleSet } = await loadSubject();
+    const state = createState();
+    const resources = {
+      patchLinked: vi.fn().mockResolvedValue(null),
+    };
+
+    const result = await executeDeclarativeRuleSet({
+      operation: {
+        key: 'POST /releases/{id}/start',
+        canonicalResponse: { status: 200 },
+      },
+      req: {
+        params: { id: 'rel-1' },
+        query: {},
+        body: { status: 'started' },
+        headers: {},
+      },
+      rules: [
+        {
+          name: 'patch-then-write',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+            },
+            writeState: {
+              releaseId: { ref: 'req.params.id' },
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 200,
+              body: { ref: 'state.current' },
+            },
+          },
+        },
+      ],
+      state,
+      resources,
+      resource: { name: 'releases', idParam: 'id' },
+      resourceCurrent: {
+        id: 'rel-1',
+        status: 'draft',
+      },
+    });
+
+    const committed = await result.commit();
+
+    expect(committed).toEqual({
+      status: 404,
+      body: { error: 'Linked resource releases with id rel-1 not found' },
+      headers: {},
+    });
+    expect(state.setDescriptor).not.toHaveBeenCalled();
+  });
 });

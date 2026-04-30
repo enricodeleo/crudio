@@ -9,6 +9,7 @@ export function createCustomHandlerAdapter({
   defaultExecutor,
   requestValidator,
   responseValidator,
+  resource,
   resources,
   resourceCurrentFactory,
   stateFactory,
@@ -37,6 +38,8 @@ export function createCustomHandlerAdapter({
         rules: declarativeRules,
         req,
         state,
+        resource,
+        resources,
         resourceCurrent,
       });
 

@@ -132,6 +132,7 @@ export async function createApp({
       defaultExecutor,
       requestValidator,
       responseValidator,
+      resource: route.resource ?? null,
       resources,
       resourceCurrentFactory: route.resource
         ? (req) => resources.getLinked(route.resource, req.params)

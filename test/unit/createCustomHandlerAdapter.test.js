@@ -141,6 +141,69 @@ describe('createCustomHandlerAdapter', () => {
     expect(state.setDescriptor).toHaveBeenCalledWith(result);
   });
 
+  it('passes linked-resource patch helpers through to declarative rules', async () => {
+    const defaultExecutor = vi.fn().mockResolvedValue({
+      descriptor: { status: 200, body: { source: 'default' }, headers: {} },
+      commit: vi.fn(),
+    });
+    const state = createRuleState();
+    const resources = {
+      patchLinked: vi.fn().mockResolvedValue({
+        id: '42',
+        status: 'published',
+      }),
+    };
+    const handler = createCustomHandlerAdapter({
+      operation: {
+        key: 'POST /reports/{id}/publish',
+        canonicalResponse: { status: 200 },
+      },
+      declarativeRules: [
+        {
+          name: 'publish-linked-resource',
+          then: {
+            patchResource: {
+              status: { ref: 'req.body.status' },
+            },
+            respond: {
+              status: 202,
+              body: { ref: 'resource.current' },
+            },
+          },
+        },
+      ],
+      defaultExecutor,
+      resource: { name: 'reports', idParam: 'id' },
+      resources,
+      stateFactory: () => state,
+      resourceCurrentFactory: async () => ({
+        id: '42',
+        status: 'draft',
+      }),
+    });
+
+    const result = await handler({
+      req: {
+        params: { id: '42' },
+        query: {},
+        body: { status: 'published' },
+        headers: {},
+      },
+    });
+
+    expect(result).toEqual({
+      status: 202,
+      body: { id: '42', status: 'published' },
+      headers: {},
+    });
+    expect(defaultExecutor).not.toHaveBeenCalled();
+    expect(resources.patchLinked).toHaveBeenCalledWith(
+      { name: 'reports', idParam: 'id' },
+      { id: '42' },
+      { status: 'published' }
+    );
+  });
+
   it('falls back to the built-in runtime when rules exist but none match and no JS handler is configured', async () => {
     const commit = vi.fn();
     const defaultExecutor = vi.fn().mockResolvedValue({

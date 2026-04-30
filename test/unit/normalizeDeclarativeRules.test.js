@@ -37,6 +37,9 @@ describe('normalizeDeclarativeRules', () => {
       {
         name: 'second',
         then: {
+          patchResource: {
+            status: 'started',
+          },
           mergeState: {
             count: 1,
           },
@@ -99,7 +102,7 @@ describe('normalizeDeclarativeRules', () => {
         {
           name: 'broken',
           then: {
-            patchResource: {
+            deleteResource: {
               status: 'started',
             },
             respond: {

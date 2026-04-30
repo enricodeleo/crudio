@@ -1,7 +1,7 @@
 import { StartupConfigurationError } from './loadCustomHandler.js';
 
 const ALLOWED_PREDICATES = new Set(['eq', 'exists', 'in']);
-const ALLOWED_EFFECTS = new Set(['writeState', 'mergeState', 'respond']);
+const ALLOWED_EFFECTS = new Set(['writeState', 'mergeState', 'patchResource', 'respond']);
 
 function assertRuleObject(rule, index) {
   if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {

@@ -125,6 +125,53 @@ const operations = [
     },
   },
   {
+    key: 'PUT /releases/{id}',
+    method: 'PUT',
+    openApiPath: '/releases/{id}',
+    expressPath: '/releases/:id',
+    operationId: 'updateRelease',
+    pathParams: ['id'],
+    requestBodySchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string' },
+        notes: { type: 'string' },
+      },
+    },
+    canonicalResponse: {
+      status: 200,
+      contentType: 'application/json',
+      schema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          status: { type: 'string' },
+          notes: { type: 'string' },
+        },
+      },
+    },
+    operation: {
+      responses: {
+        '200': {
+          description: 'ok',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  status: { type: 'string' },
+                  notes: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
     key: 'POST /releases/{id}/start',
     method: 'POST',
     openApiPath: '/releases/{id}/start',
@@ -270,7 +317,7 @@ const resources = [
         },
       },
     },
-    methods: ['getById'],
+    methods: ['getById', 'update'],
   },
 ];
 
@@ -379,5 +426,74 @@ describe('buildOperationRegistry', () => {
         'POST /pets': { mode: 'operation-state' },
       })
     ).toThrow(/either "createPet" or "POST \/pets"/);
+  });
+
+  it('rejects patchResource rules on operations without a linked resource target', () => {
+    expect(() =>
+      buildOperationRegistry(operations, resources, {
+        login: {
+          rules: [
+            {
+              name: 'login-rule',
+              then: {
+                patchResource: {
+                  status: 'started',
+                },
+                respond: {
+                  status: 200,
+                  body: { ok: true },
+                },
+              },
+            },
+          ],
+        },
+      })
+    ).toThrow(/linked resource target/i);
+  });
+
+  it('allows patchResource rules on CRUD item routes with a linked resource target', () => {
+    const entry = buildOperationRegistry(operations, resources, {
+      updateRelease: {
+        rules: [
+          {
+            name: 'patch-linked-release',
+            then: {
+              patchResource: {
+                status: 'started',
+              },
+              respond: {
+                status: 200,
+                body: { ok: true },
+              },
+            },
+          },
+        ],
+      },
+    }).find((route) => route.operation.key === 'PUT /releases/{id}');
+
+    expect(entry).toMatchObject({
+      routeKind: 'resource',
+      crudOperation: 'update',
+      resource: resources[1],
+      operationConfig: {
+        enabled: true,
+        mode: 'auto',
+        querySensitive: false,
+        rules: [
+          {
+            name: 'patch-linked-release',
+            then: {
+              patchResource: {
+                status: 'started',
+              },
+              respond: {
+                status: 200,
+                body: { ok: true },
+              },
+            },
+          },
+        ],
+      },
+    });
   });
 });

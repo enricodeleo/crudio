@@ -1,3 +1,5 @@
+import { validateDeclarativeRuleEffects } from './validateDeclarativeRuleEffects.js';
+
 const CRUD_ROUTE_MAP = {
   list: { method: 'GET', path: 'collection' },
   getById: { method: 'GET', path: 'item' },
@@ -166,6 +168,12 @@ export function buildOperationRegistry(
         `resource-aware mode for "${operation.key}" failed build-time projection checks and was downgraded to operation-state.`
       );
     }
+
+    validateDeclarativeRuleEffects({
+      operation,
+      rules: operationConfig.rules,
+      resource,
+    });
 
     registry.push({
       method: operation.method,

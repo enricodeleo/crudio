@@ -73,4 +73,52 @@ describe('buildHandlerResourceHelpers', () => {
     expect(engine.patch).toHaveBeenCalledWith(1, { enabled: true });
     expect(engine.delete).toHaveBeenCalledWith(1);
   });
+
+  it('patches the linked resource item using route metadata and params', async () => {
+    const engine = {
+      patch: vi.fn().mockResolvedValue({
+        id: 'rel-1',
+        status: 'started',
+        metadata: { flags: ['fresh'] },
+      }),
+    };
+    const resources = buildHandlerResourceHelpers(new Map([['releases', { engine }]]));
+
+    await expect(
+      resources.patchLinked(
+        { name: 'releases', idParam: 'id' },
+        { id: 'rel-1' },
+        {
+          status: 'started',
+          metadata: { flags: ['fresh'] },
+        }
+      )
+    ).resolves.toEqual({
+      id: 'rel-1',
+      status: 'started',
+      metadata: { flags: ['fresh'] },
+    });
+
+    expect(engine.patch).toHaveBeenCalledWith('rel-1', {
+      status: 'started',
+      metadata: { flags: ['fresh'] },
+    });
+  });
+
+  it('returns null when the linked resource item is missing or cannot be addressed', async () => {
+    const engine = {
+      patch: vi.fn().mockResolvedValue(null),
+    };
+    const resources = buildHandlerResourceHelpers(new Map([['releases', { engine }]]));
+
+    await expect(
+      resources.patchLinked({ name: 'releases', idParam: 'id' }, { id: 'missing' }, { status: 'started' })
+    ).resolves.toBeNull();
+    await expect(
+      resources.patchLinked({ name: 'releases', idParam: 'id' }, {}, { status: 'started' })
+    ).resolves.toBeNull();
+
+    expect(engine.patch).toHaveBeenCalledTimes(1);
+    expect(engine.patch).toHaveBeenCalledWith('missing', { status: 'started' });
+  });
 });

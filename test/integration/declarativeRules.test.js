@@ -63,25 +63,28 @@ describe('declarative rules integration', () => {
   });
 
   it('falls back to built-in behavior when rules exist but none match and no handler is configured', async () => {
-    const app = await buildApp({
-      getCountrySummary: {
-        rules: [
-          {
-            name: 'special-view',
-            if: { eq: [{ ref: 'req.query.view' }, 'special'] },
-            then: {
-              respond: {
-                status: 200,
-                body: {
-                  code: { ref: 'req.params.code' },
-                  status: 'special',
+    const app = await buildApp(
+      {
+        getCountrySummary: {
+          rules: [
+            {
+              name: 'special-view',
+              if: { eq: [{ ref: 'req.query.view' }, 'special'] },
+              then: {
+                respond: {
+                  status: 200,
+                  body: {
+                    code: { ref: 'req.params.code' },
+                    status: 'special',
+                  },
                 },
               },
             },
-          },
-        ],
+          ],
+        },
       },
-    });
+      { responseFake: 'off' }
+    );
 
     const res = await request(app, 'GET', '/countries/IT/summary');
 

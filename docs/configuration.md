@@ -129,6 +129,7 @@ Crudio does not extend OpenAPI. Per-operation and per-resource behavior the spec
 | `seed.count` | `number` | Default CRUD seed count |
 | `seed.strategy` | `'config-first' \| 'examples-first' \| 'fakes-only'` | Parsed config field reserved for future resource-seeding policy |
 | `validateResponses` | `'strict' \| 'warn' \| 'off'` | Response validation policy for built-in routes, declarative rules, and custom handlers |
+| `responseFake` | `'auto' \| 'off'` | When `'auto'` (default), non-CRUD operations without an explicit seed are auto-populated with a fake payload generated from the documented response schema. Set to `'off'` to restore the legacy echo-input behavior. |
 
 `--seed N` maps only to `seed.count`. Per-resource and per-operation seeding must come from config.
 
@@ -182,6 +183,7 @@ operations: {
 | `querySensitive` | `boolean` | `false` | Include all present query params in the operation scope key |
 | `seed.default` | `object` | — | Default response-shaped state for that operation |
 | `seed.scopes` | `Record<string, object>` | `{}` | Explicit scope-keyed response-shaped state |
+| `responseFake` | `'auto' \| 'off'` | inherits top-level | Per-operation override of the response-fake fallback policy |
 
 `mode` applies only to non-CRUD operations. CRUD-claimed operations always use shared resource state.
 
@@ -267,6 +269,25 @@ Examples:
 - `code=IT&cityId=42`
 
 An empty string scope key (`''`) is valid for path-less operations. When `querySensitive: true`, all present query params participate in the scope key.
+
+## Response Fake Fallback
+
+For non-CRUD operations, Crudio derives a fake response payload from the documented response schema at boot whenever:
+
+- the operation is not CRUD-claimed and is not projection-eligible into a parent CRUD resource
+- no explicit `seed.default` or `seed.scopes` is configured
+- a canonical 2xx JSON response schema is present in the spec
+- `responseFake` is `'auto'` (the default) — both top-level and per-operation
+
+The generated payload is persisted as the operation's default state with an internal `origin: 'auto-fake'` marker. While that marker is in effect:
+
+- `GET` returns the fake until a scoped write replaces it
+- `POST` and `PUT` return the fake unchanged (no merge with `req.body`) and persist it as scope-specific state, so later reads on the same scope stay consistent
+- `PATCH` returns the fake unchanged when the body is an array; for object bodies it still applies merge semantics
+
+Set `responseFake: 'off'` either top-level or per-operation to keep the legacy behavior, where POST/PUT echo `req.body` merged with any configured default and GET returns `404` until something writes state.
+
+Explicit `seed.default` or `seed.scopes` always wins — auto-fake never overrides an opinion the developer expressed in config.
 
 ## Seeding
 

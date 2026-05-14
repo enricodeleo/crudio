@@ -16,12 +16,13 @@ describe('operation-state routes integration', () => {
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
-  async function buildApp(operations = {}) {
+  async function buildApp(operations = {}, options = {}) {
     return createApp({
       specPath: join(FIXTURES, 'operation-state.yaml'),
       dataDir: TEST_DIR,
       resources: {},
       operations,
+      ...options,
     });
   }
 
@@ -62,6 +63,67 @@ describe('operation-state routes integration', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: 'unavailable' });
+  });
+
+  it('auto-fakes a non-CRUD POST response from the documented schema (response-shape, not input-shape)', async () => {
+    const app = await buildApp();
+
+    const res = await request(app, 'POST', '/auth/login', {
+      email: 'ada@example.com',
+      password: 'hunter2',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      token: expect.any(String),
+      role: expect.any(String),
+    });
+    expect(res.body).not.toHaveProperty('email');
+    expect(res.body).not.toHaveProperty('password');
+  });
+
+  it('returns the same auto-fake payload across repeated calls in the same scope (sticky)', async () => {
+    const app = await buildApp();
+
+    const first = await request(app, 'POST', '/auth/login', {
+      email: 'ada@example.com',
+      password: 'hunter2',
+    });
+    const second = await request(app, 'POST', '/auth/login', {
+      email: 'different@example.com',
+      password: 'whatever',
+    });
+
+    expect(first.body).toEqual(second.body);
+  });
+
+  it('echoes the input again when responseFake is "off" (opt-out)', async () => {
+    const app = await buildApp({}, { responseFake: 'off' });
+
+    const res = await request(app, 'POST', '/auth/login', {
+      email: 'ada@example.com',
+      password: 'hunter2',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ email: 'ada@example.com', password: 'hunter2' });
+  });
+
+  it('does not auto-fake when an explicit seed.default is provided', async () => {
+    const app = await buildApp({
+      login: {
+        seed: { default: { token: 'configured-token', role: 'admin' } },
+      },
+    });
+
+    const res = await request(app, 'POST', '/auth/login', {
+      email: 'ada@example.com',
+      password: 'hunter2',
+    });
+
+    // Explicit seed.default keeps the legacy echo-and-merge behavior, so the
+    // configured fields appear alongside whatever the caller posted.
+    expect(res.body).toMatchObject({ token: 'configured-token', role: 'admin' });
   });
 
   it('updates backing resource state from a projection candidate route', async () => {

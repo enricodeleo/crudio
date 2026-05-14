@@ -27,6 +27,7 @@ function normalizeOperationConfig(operationConfig = {}) {
         enabled: config.enabled ?? true,
         mode: config.mode ?? 'auto',
         querySensitive: config.querySensitive ?? false,
+        responseFake: config.responseFake,
         rules: normalizeDeclarativeRules(config.rules),
         seed: {
           default: config.seed?.default,
@@ -58,6 +59,7 @@ export async function loadConfig(args) {
     resources: normalizeResourceConfig(fileConfig.resources ?? {}),
     operations: normalizeOperationConfig(fileConfig.operations ?? {}),
     validateResponses: fileConfig.validateResponses ?? 'warn',
+    responseFake: fileConfig.responseFake ?? 'auto',
     handlerBaseDir: resolvedConfigPath ? dirname(resolvedConfigPath) : process.cwd(),
   };
 }

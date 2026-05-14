@@ -41,6 +41,7 @@ async function main() {
     seedPerResource: toLegacySeedPerResource(config.resources),
     handlerBaseDir: config.handlerBaseDir,
     validateResponses: config.validateResponses,
+    responseFake: config.responseFake,
   });
 
   const server = app.listen(config.port, () => {

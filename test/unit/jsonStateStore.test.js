@@ -105,6 +105,20 @@ describe('JsonStateStore', () => {
     });
   });
 
+  it('preserves arbitrary metadata fields on operation default state (e.g. origin)', async () => {
+    await store.writeOperationDefaultState('POST /devices/search', {
+      status: 200,
+      body: [{ type: 'DESKTOP' }],
+      headers: {},
+      origin: 'auto-fake',
+    });
+
+    const reloaded = new JsonStateStore(testDir);
+    const state = await reloaded.readOperationDefaultState('POST /devices/search');
+    expect(state.origin).toBe('auto-fake');
+    expect(state.body).toEqual([{ type: 'DESKTOP' }]);
+  });
+
   it('does not create registry metadata when reading unseen operation state', async () => {
     const registryFile = join(testDir, '_meta', 'registry.json');
 

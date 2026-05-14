@@ -342,6 +342,21 @@ describe('buildOperationRegistry', () => {
     });
   });
 
+  it('preserves per-operation responseFake on the registry entry', () => {
+    const registry = buildOperationRegistry(operations, resources, {
+      'POST /auth/login': { responseFake: 'off' },
+    });
+
+    const entry = registry.find((route) => route.operation.key === 'POST /auth/login');
+    expect(entry.operationConfig.responseFake).toBe('off');
+  });
+
+  it('leaves responseFake undefined on operations without an override', () => {
+    const registry = buildOperationRegistry(operations, resources, {});
+    const entry = registry.find((route) => route.operation.key === 'POST /auth/login');
+    expect(entry.operationConfig.responseFake).toBeUndefined();
+  });
+
   it('keeps CRUD-claimed operations resource-backed even when mode requests operation-state', () => {
     const entry = buildOperationRegistry(operations, resources, {
       createPet: { mode: 'operation-state' },

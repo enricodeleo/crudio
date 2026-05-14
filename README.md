@@ -92,6 +92,8 @@ curl -X POST http://localhost:3000/pets \
 
 CRUD-shaped operations share resource state. Everything else is served as operation-state: the response body is persisted per operation scope and replayed on later reads, with optional projection into a parent resource when the response schema is a compatible subset.
 
+For non-CRUD operations without an explicit seed, Crudio generates a fake payload from the documented response schema at boot and serves it on the first call (then stays consistent per scope). Set `responseFake: 'off'` to restore the legacy echo-input behavior — see [Configuration](docs/configuration.md#response-fake-fallback) for the full rules.
+
 ## Declarative Rules
 
 For many non-trivial endpoints you can stay in config and avoid JavaScript entirely.
@@ -176,6 +178,7 @@ Custom handlers work on both CRUD and non-CRUD routes. CRUD request validation s
 - Schema-driven ID generation (incremental integer, UUID, string)
 - Fake data seeding for CRUD resources
 - explicit default and per-scope seeding for non-CRUD operations
+- auto-fake fallback from response schema for non-CRUD operations (opt-out via `responseFake: 'off'`)
 - Programmatic usage as a Node.js library
 
 ### Not supported (v1)

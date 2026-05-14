@@ -15,7 +15,41 @@ describe('loadConfig', () => {
     expect(config.resources).toEqual({});
     expect(config.operations).toEqual({});
     expect(config.validateResponses).toBe('warn');
+    expect(config.responseFake).toBe('auto');
     expect(config.handlerBaseDir).toBe(process.cwd());
+  });
+
+  it('reads responseFake from the config file and propagates per-operation overrides', async () => {
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tmpDir = join(import.meta.dirname, '..', 'tmp-response-fake-config');
+    mkdirSync(tmpDir, { recursive: true });
+    const configFile = join(tmpDir, 'crudio.config.js');
+    writeFileSync(
+      configFile,
+      `
+      export default {
+        responseFake: 'off',
+        operations: {
+          'POST /off': { responseFake: 'off' },
+          'POST /forced-auto': { responseFake: 'auto' },
+          'POST /inherits': {},
+        },
+      };
+      `
+    );
+    try {
+      const config = await loadConfig({
+        specPath: './spec.yaml',
+        config: configFile,
+      });
+      expect(config.responseFake).toBe('off');
+      expect(config.operations['POST /off'].responseFake).toBe('off');
+      expect(config.operations['POST /forced-auto'].responseFake).toBe('auto');
+      expect(config.operations['POST /inherits'].responseFake).toBeUndefined();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('overrides defaults with CLI args', async () => {

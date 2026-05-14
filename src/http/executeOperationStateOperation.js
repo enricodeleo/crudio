@@ -18,6 +18,14 @@ function asObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function isAutoFake(state) {
+  return state?.origin === 'auto-fake';
+}
+
+function isArrayBody(state) {
+  return Array.isArray(state?.body);
+}
+
 function buildScopeParts(req, operationConfig) {
   return operationConfig.querySensitive ? { ...req.params, ...req.query } : { ...req.params };
 }
@@ -92,10 +100,11 @@ export async function executeOperationStateOperation({
       }
 
       const defaultState = await storage.readOperationDefaultState(operation.key);
-      descriptor = json(
-        successStatus(operation, 200),
-        buildStateBody(defaultState?.body, req.body, req.params)
-      );
+      const body =
+        isAutoFake(defaultState) || isArrayBody(defaultState)
+          ? defaultState.body
+          : buildStateBody(defaultState?.body, req.body, req.params);
+      descriptor = json(successStatus(operation, 200), body);
       commit = async (finalDescriptor = descriptor) => {
         const state = {
           status: finalDescriptor.status,
@@ -125,10 +134,11 @@ export async function executeOperationStateOperation({
 
       const existingState = await storage.readOperationState(operation.key, scopeKey);
       const defaultState = existingState ? null : await storage.readOperationDefaultState(operation.key);
-      descriptor = json(
-        successStatus(operation, 200),
-        buildStateBody(existingState?.body ?? defaultState?.body, req.body, req.params)
-      );
+      const sourceState = existingState ?? defaultState;
+      const body = isArrayBody(sourceState)
+        ? sourceState.body
+        : buildStateBody(sourceState?.body, req.body, req.params);
+      descriptor = json(successStatus(operation, 200), body);
       commit = async (finalDescriptor = descriptor) => {
         const state = {
           status: finalDescriptor.status,

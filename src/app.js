@@ -21,6 +21,7 @@ import { CrudEngine } from './engine/crudEngine.js';
 import { IdStrategy } from './engine/idStrategy.js';
 import { JsonStateStore } from './storage/jsonStateStore.js';
 import { seedOperationState } from './seed/operationSeedEngine.js';
+import { seedResponseFakeFallback } from './seed/responseFakeFallback.js';
 import { seedAll } from './seed/seedEngine.js';
 
 export async function createApp({
@@ -32,6 +33,7 @@ export async function createApp({
   seedPerResource,
   handlerBaseDir = process.cwd(),
   validateResponses = 'warn',
+  responseFake = 'auto',
 }) {
   const effectiveResourceConfig = mergeResourceConfig(resourceConfig, seedPerResource);
   const spec = await loadSpec(specPath);
@@ -84,6 +86,12 @@ export async function createApp({
   await seedOperationState({
     registry: routes,
     storage,
+  });
+
+  await seedResponseFakeFallback({
+    registry: routes,
+    storage,
+    defaultResponseFake: responseFake,
   });
 
   const app = express();

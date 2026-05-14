@@ -1,8 +1,15 @@
 import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 import { ValidationError } from './errors.js';
 
-export function createValidators(schema) {
+function createAjv() {
   const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
+  return ajv;
+}
+
+export function createValidators(schema) {
+  const ajv = createAjv();
 
   const bodyValidator = ajv.compile(schema);
 
@@ -80,21 +87,25 @@ export function createOperationResponseValidator(operation, mode = 'warn') {
     return null;
   }
 
-  const status = operation?.canonicalResponse?.status;
+  const canonicalStatus = operation?.canonicalResponse?.status;
   const contentType = operation?.canonicalResponse?.contentType;
   const schema =
-    status && contentType
-      ? operation?.operation?.responses?.[String(status)]?.content?.[contentType]?.schema
+    canonicalStatus && contentType
+      ? operation?.operation?.responses?.[String(canonicalStatus)]?.content?.[contentType]?.schema
       : null;
 
   if (!schema) {
     return null;
   }
 
-  const ajv = new Ajv({ allErrors: true, strict: false });
+  const ajv = createAjv();
   const validate = ajv.compile(schema);
 
-  return (body) => {
+  return (body, status) => {
+    if (status !== undefined && status !== canonicalStatus) {
+      return;
+    }
+
     const valid = validate(body);
     if (valid) {
       return;

@@ -46,6 +46,7 @@
     "@faker-js/faker": "^10.4.0",
     "@readme/openapi-parser": "^6.0.1",
     "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "express": "^5.2.1"
   },
   "devDependencies": {

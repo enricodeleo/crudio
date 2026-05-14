@@ -1,3 +1,5 @@
+import { extractResponseSchema } from '../openapi/extractResponseSchema.js';
+import { buildListResponseBody } from './buildListResponseBody.js';
 import { json } from './responseDescriptor.js';
 
 function successStatus(operation, fallback) {
@@ -27,7 +29,13 @@ export async function executeCrudOperation({
   switch (crudOperation) {
     case 'list': {
       const query = validators.parseQuery(req.query);
-      descriptor = json(successStatus(operation, 200), await engine.list(query));
+      const { items, total } = await engine.list(query);
+      const body = buildListResponseBody({
+        schema: extractResponseSchema(operation),
+        items,
+        total,
+      });
+      descriptor = json(successStatus(operation, 200), body);
       break;
     }
 

@@ -39,6 +39,7 @@ crudio/
 │   │   ├── loadSpec.js        # OpenAPI loading + dereferencing
 │   │   ├── compileOperations.js # Normalized method + path compilation
 │   │   ├── inferResources.js  # CRUD resource inference from operations
+│   │   ├── extractResponseSchema.js # Canonical 2xx response schema extraction + normalization
 │   │   ├── schemaResolver.js  # Schema normalization (allOf, rejects oneOf)
 │   ├── engine/
 │   │   ├── crudEngine.js      # Pure CRUD logic (no HTTP)
@@ -67,7 +68,8 @@ crudio/
 │   │   ├── projectResourceState.js # Safe projection into parent resources
 │   │   └── scopeKey.js        # Canonical operation scope key builder
 │   └── seed/
-│       ├── operationSeedEngine.js # Non-CRUD operation-state seeding
+│       ├── operationSeedEngine.js # Non-CRUD operation-state explicit seeding
+│       ├── responseFakeFallback.js # Auto-fake fallback from documented response schema
 │       ├── seedEngine.js      # CRUD resource seeding orchestrator
 │       └── fakeGenerator.js   # Schema-aware fake data
 ├── test/
@@ -89,7 +91,7 @@ Each module has a single responsibility and no cross-cutting dependencies:
 - **`storage/`** — persistence interface and namespaced JSON storage for resources and operations
 - **`http/`** — operation registry, descriptor executors, custom-handler adapter, validation, error handling
 - **`operations/`** — scope key construction and safe resource projection helpers
-- **`seed/`** — fake data generation plus resource and operation-state seeding
+- **`seed/`** — fake data generation, CRUD resource seeding, explicit operation-state seeding, and response-fake fallback from response schemas
 
 `compileOperations()` is the bootstrap source of truth. `inferResources()` derives only the CRUD-backed subset from that operation list; everything else is mounted as operation-state. `CrudEngine` never touches HTTP or Express, and non-CRUD state persistence goes through `StorageAdapter` instead of the engine layer.
 

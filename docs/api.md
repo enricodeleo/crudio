@@ -38,13 +38,21 @@ Typical examples:
 
 Default behavior:
 
-- `GET` reads scoped state, then falls back to default seeded state, then returns `404`
-- `POST` and `PUT` persist a response-shaped body built from seeded default state, request body, and path params
-- `PATCH` shallow-merges into existing scoped state, or into default seeded state when no scoped state exists yet
+- `GET` reads scoped state, then falls back to default state, then returns `404`
+- `POST` and `PUT` derive a response-shaped body from default state, request body, and path params, then persist it as scope-specific state
+- `PATCH` shallow-merges `req.body` and path params into existing scoped state (or into default state when no scoped state exists yet)
 - `DELETE` removes the scoped state and returns `404` when the scope does not exist
 - `204`-only operations return `204` and do not create response-shaped stored state
 
-When an operation descends from a CRUD resource item path and its response schema is a compatible subset, `mode: 'auto'` or `mode: 'resource-aware'` can also project overlapping fields back into the parent resource item.
+Default state for an operation comes from one of three sources, in priority order:
+
+1. an explicit `operations.<key>.seed.default` from `crudio.config.js`
+2. the response-fake fallback — a payload auto-generated from the documented response schema at boot when `responseFake` is `'auto'` (default)
+3. otherwise: no default state, which makes `GET` return `404` and `POST`/`PUT` echo `req.body` merged with path params
+
+When the default state was produced by the response-fake fallback, `POST` and `PUT` return its body **unchanged** (no merge with `req.body`) so that the response shape matches the documented schema rather than the input shape. Array-bodied defaults are likewise returned unchanged across `POST`, `PUT`, and `PATCH`. See [Response Fake Fallback](configuration.md#response-fake-fallback) for the full rules and the `responseFake: 'off'` opt-out.
+
+When an operation descends from a CRUD resource item path and its response schema is a compatible subset, `mode: 'auto'` or `mode: 'resource-aware'` can also project overlapping fields back into the parent resource item. Projection-eligible operations are exempted from the response-fake fallback so that the projection flow keeps persisting the caller's input.
 
 ## Health Check
 
@@ -63,21 +71,70 @@ GET /_crudio/health
 
 ## CRUD List Semantics
 
+The list response **shape follows the documented response schema** in the spec. Crudio adapts the same internal `{items, total}` projection to whatever the contract declares.
+
+### `type: array` response
+
+```yaml
+/pets:
+  get:
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/Pet" }
+```
+
 ```http
 GET /pets?tag=dog&limit=10&offset=20
 ```
 
-**Response**
+```json
+[{ "id": 1, "name": "Rex", "tag": "dog" }]
+```
+
+A plain array is returned. The filter/limit/offset pipeline runs first; the result is the sliced page.
+
+### `type: object` response (e.g. paginated wrapper)
+
+```yaml
+/pets:
+  get:
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items: { type: array, items: { $ref: "#/components/schemas/Pet" } }
+                total: { type: integer }
+                nextCursor: { type: string }
+```
+
+```http
+GET /pets?tag=dog&limit=10
+```
 
 ```json
 {
   "items": [{ "id": 1, "name": "Rex", "tag": "dog" }],
-  "total": 42
+  "total": 42,
+  "nextCursor": "..."
 }
 ```
 
-- `total` is the count after filtering and before pagination
-- `items` is the sliced page
+How the object body is filled:
+
+- the **first array property** in the schema (any name — `items`, `data`, `results`, …) receives the paginated page
+- integer/number properties named `total`, `count`, `totalItems`, or `totalCount` receive the post-filter pre-pagination count
+- every other property is filled with a fake value generated from its sub-schema (so `nextCursor`, `links`, `meta`, etc. round-trip with type-correct payloads)
+
+### No response schema documented
+
+If the spec leaves the success response schemaless, Crudio falls back to the legacy `{ items, total }` wrapper so existing callers keep working. Document a response schema to opt into the contract-driven shape.
 
 ### Query Parameters
 
@@ -89,6 +146,7 @@ GET /pets?tag=dog&limit=10&offset=20
 
 - Multiple filters are AND-combined
 - Only top-level properties are filterable
+- `limit` and `offset` are accepted on all list routes as a Crudio runtime extension, even when the spec does not declare them as parameters. They do not appear in the response body unless the response schema includes a matching `total`/`count` property.
 
 ## Validation
 
@@ -221,13 +279,16 @@ app.listen(3000);
 
 ### `createApp(options)`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `specPath` | `string` | Path to the OpenAPI spec |
-| `dataDir` | `string` | JSON storage directory |
-| `resources` | `object` | Per-resource config |
-| `operations` | `object` | Per-operation config |
-| `seed` | `number` | Default CRUD seed count |
-| `seedPerResource` | `Record<string, number>` | Internal CLI-style override map for CRUD resource seed counts |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `specPath` | `string` | — | Path to the OpenAPI spec |
+| `dataDir` | `string` | — | JSON storage directory |
+| `resources` | `object` | `{}` | Per-resource config |
+| `operations` | `object` | `{}` | Per-operation config |
+| `seed` | `number` | — | Default CRUD seed count |
+| `seedPerResource` | `Record<string, number>` | — | Internal CLI-style override map for CRUD resource seed counts |
+| `handlerBaseDir` | `string` | `process.cwd()` | Base directory used to resolve relative custom-handler module paths |
+| `validateResponses` | `'strict' \| 'warn' \| 'off'` | `'warn'` | Response validation policy for built-in routes, declarative rules, and custom handlers |
+| `responseFake` | `'auto' \| 'off'` | `'auto'` | Non-CRUD response-fake fallback policy. See [Response Fake Fallback](configuration.md#response-fake-fallback). |
 
 For the full config surface, prefer `crudio.config.js` plus `loadConfig()` semantics documented in [configuration.md](configuration.md).

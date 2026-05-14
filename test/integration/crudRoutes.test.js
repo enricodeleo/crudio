@@ -37,25 +37,25 @@ describe('CRUD routes integration', () => {
     expect(res.body.id).toBe(1);
   });
 
-  it('GET /pets returns empty list', async () => {
+  it('GET /pets returns an empty array when the spec declares `type: array`', async () => {
     const res = await request('GET', '/pets');
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([]);
-    expect(res.body.total).toBe(0);
+    expect(res.body).toEqual([]);
   });
 
-  it('GET /pets returns created pets', async () => {
+  it('GET /pets returns created pets as a plain array (matches `type: array` in the spec)', async () => {
     await request('POST', '/pets', { name: 'Rex' });
     await request('POST', '/pets', { name: 'Buddy' });
     const res = await request('GET', '/pets');
     expect(res.status).toBe(200);
-    expect(res.body.items).toHaveLength(2);
-    expect(res.body.total).toBe(2);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(2);
   });
 
   it('keeps the petstore CRUD flow green through the operation-first app', async () => {
     await request('POST', '/pets', { name: 'Rex' });
-    expect((await request('GET', '/pets')).body.total).toBe(1);
+    const list = await request('GET', '/pets');
+    expect(list.body).toHaveLength(1);
     expect((await request('GET', '/pets/1')).status).toBe(200);
   });
 
@@ -111,15 +111,15 @@ describe('CRUD routes integration', () => {
     );
   });
 
-  it('GET /pets supports query params', async () => {
+  it('GET /pets supports query params and returns a paginated array (spec says `type: array`)', async () => {
     await request('POST', '/pets', { name: 'Rex', tag: 'dog' });
     await request('POST', '/pets', { name: 'Whiskers', tag: 'cat' });
     await request('POST', '/pets', { name: 'Buddy', tag: 'dog' });
     const res = await request('GET', '/pets?tag=dog&limit=1');
     expect(res.status).toBe(200);
-    expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0].tag).toBe('dog');
-    expect(res.body.total).toBe(2);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].tag).toBe('dog');
   });
 
   it('returns 404 for non-CRUD paths', async () => {
@@ -140,6 +140,30 @@ describe('CRUD routes integration', () => {
   });
 });
 
+describe('list response shape follows the spec', () => {
+  it('wraps items+total when the response schema is an object', async () => {
+    const { mkdirSync, rmSync } = await import('node:fs');
+    const WRAP_DIR = join(import.meta.dirname, '..', 'tmp-wrapped-list');
+    rmSync(WRAP_DIR, { recursive: true, force: true });
+    mkdirSync(WRAP_DIR, { recursive: true });
+    const wrappedApp = await createApp({
+      specPath: join(FIXTURES, 'petstore-wrapped-list.yaml'),
+      dataDir: WRAP_DIR,
+      resources: {},
+    });
+    const { default: supertest } = await import('supertest');
+    await supertest(wrappedApp).post('/pets').send({ name: 'Rex' }).set('Content-Type', 'application/json');
+    await supertest(wrappedApp).post('/pets').send({ name: 'Buddy' }).set('Content-Type', 'application/json');
+    const res = await supertest(wrappedApp).get('/pets');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(false);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.total).toBe(2);
+    rmSync(WRAP_DIR, { recursive: true, force: true });
+  });
+});
+
 describe('seeding', () => {
   it('seeds data when seed option is provided', async () => {
     const { mkdirSync, rmSync } = await import('node:fs');
@@ -155,8 +179,8 @@ describe('seeding', () => {
     const { default: supertest } = await import('supertest');
     const res = await supertest(seededApp).get('/pets');
     expect(res.status).toBe(200);
-    expect(res.body.items).toHaveLength(5);
-    expect(res.body.total).toBe(5);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(5);
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 });

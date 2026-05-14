@@ -25,7 +25,7 @@ export function createCustomHandlerAdapter({
       const defaultExecution = await defaultExecutor({ req });
       const descriptor = defaultExecution.descriptor;
       if (responseValidator) {
-        responseValidator(descriptor.body);
+        responseValidator(descriptor.body, descriptor.status);
       }
       await defaultExecution.commit?.(descriptor);
       return descriptor;
@@ -46,7 +46,7 @@ export function createCustomHandlerAdapter({
       if (ruleExecution.matched) {
         const descriptor = ruleExecution.descriptor;
         if (responseValidator) {
-          responseValidator(descriptor.body);
+          responseValidator(descriptor.body, descriptor.status);
         }
         await ruleExecution.commit?.(descriptor);
         return descriptor;

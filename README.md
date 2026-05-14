@@ -52,9 +52,12 @@ curl -X POST http://localhost:3000/pets \
   -d '{"name":"Rex","tag":"dog"}'
 # → 201 {"id":1,"name":"Rex","tag":"dog"}
 
-# List (with filtering and pagination)
+# List — the response shape follows the spec.
+# If GET /pets is documented as `type: array`, you get a plain array:
 curl http://localhost:3000/pets?tag=dog&limit=10&offset=0
-# → 200 {"items":[{"id":1,"name":"Rex","tag":"dog"}],"total":1}
+# → 200 [{"id":1,"name":"Rex","tag":"dog"}]
+# If it's documented as an object (e.g. {items, total, nextCursor}), Crudio
+# fills the first array property and any total/count field accordingly.
 
 # Get by ID
 curl http://localhost:3000/pets/1

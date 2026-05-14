@@ -291,14 +291,18 @@ Explicit `seed.default` or `seed.scopes` always wins — auto-fake never overrid
 
 ## Seeding
 
-CRUD resources use schema-driven fake generation. Non-CRUD operations use explicit response-shaped seed data.
+CRUD resources use schema-driven fake generation. Non-CRUD operations get default state from either explicit response-shaped seed data or — when `responseFake` is `'auto'` — the response-fake fallback described above.
 
 CRUD seed precedence is:
 
 1. `resources.<name>.seed`
 2. top-level `seed.count`
 
-Operation-state seeds come only from `operations.<key>.seed`.
+Non-CRUD operation default-state precedence is:
+
+1. `operations.<key>.seed.default` and `seed.scopes` (always wins when present)
+2. the response-fake fallback (when `responseFake !== 'off'`, the operation is not CRUD-claimed, is not projection-eligible, and has a usable response schema)
+3. no default state — `GET` returns `404` and `POST`/`PUT` echo `req.body` merged with path params
 
 `seed.strategy` is already accepted by config loading, but the current runtime still behaves like `config-first` for CRUD seeding. The named values reserved for that future policy are:
 

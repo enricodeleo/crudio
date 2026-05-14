@@ -29,6 +29,16 @@ function extractMethods(byKey, collectionPath, itemPath) {
   return methods;
 }
 
+function findItemSchemaInsideWrapper(schema) {
+  if (schema?.type !== 'object' || !schema.properties) return null;
+  for (const propSchema of Object.values(schema.properties)) {
+    if (propSchema?.type === 'array' && propSchema.items) {
+      return propSchema.items;
+    }
+  }
+  return null;
+}
+
 function normalizeResourceSchema(schema, resourceName) {
   if (!schema) return null;
 
@@ -36,6 +46,12 @@ function normalizeResourceSchema(schema, resourceName) {
 
   if (normalized.type === 'array' && normalized.items) {
     normalized = normalize(normalized.items, resourceName) ?? normalized;
+    return normalized;
+  }
+
+  const itemFromWrapper = findItemSchemaInsideWrapper(normalized);
+  if (itemFromWrapper) {
+    normalized = normalize(itemFromWrapper, resourceName) ?? normalized;
   }
 
   return normalized;

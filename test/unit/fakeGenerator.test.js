@@ -54,11 +54,26 @@ describe('fakeGenerator', () => {
     expect(typeof value).toBe('boolean');
   });
 
-  it('generates an array from items schema', () => {
+  it('generates an array from items schema (default: 1 deterministic item when useExamples)', () => {
     const value = generateFake({ type: 'array', items: { type: 'string' } });
     expect(Array.isArray(value)).toBe(true);
-    expect(value.length).toBeGreaterThanOrEqual(1);
-    expect(value.length).toBeLessThanOrEqual(3);
+    expect(value).toHaveLength(1);
+  });
+
+  it('generates 1-3 random items when useExamples is false (seed CRUD path)', () => {
+    const lengths = new Set();
+    for (let i = 0; i < 50; i++) {
+      const value = generateFake(
+        { type: 'array', items: { type: 'string' } },
+        { useExamples: false }
+      );
+      expect(Array.isArray(value)).toBe(true);
+      expect(value.length).toBeGreaterThanOrEqual(1);
+      expect(value.length).toBeLessThanOrEqual(3);
+      lengths.add(value.length);
+    }
+    // Over 50 tries we expect to see at least 2 distinct lengths in the 1..3 range.
+    expect(lengths.size).toBeGreaterThan(1);
   });
 
   it('generates an object from properties', () => {
@@ -75,9 +90,8 @@ describe('fakeGenerator', () => {
     expect(Number.isInteger(value.age)).toBe(true);
   });
 
-  it('skips optional properties ~50% of the time', () => {
-    let missingOptional = 0;
-    for (let i = 0; i < 100; i++) {
+  it('always populates optional properties (drop-in mock returns complete shape)', () => {
+    for (let i = 0; i < 50; i++) {
       const value = generateFake({
         type: 'object',
         properties: {
@@ -86,9 +100,57 @@ describe('fakeGenerator', () => {
         },
         required: ['required_field'],
       });
-      if (value.optional_field === undefined) missingOptional++;
+      expect(value.required_field).toBeDefined();
+      expect(value.optional_field).toBeDefined();
     }
-    expect(missingOptional).toBeGreaterThan(0);
+  });
+
+  it('returns the schema example verbatim when useExamples is true (default)', () => {
+    const value = generateFake({
+      type: 'string',
+      example: 'configured-value',
+    });
+    expect(value).toBe('configured-value');
+  });
+
+  it('returns the schema example for objects and arrays (deep cloned)', () => {
+    const example = { token: 'abc', roles: ['admin', 'user'] };
+    const out = generateFake({
+      type: 'object',
+      example,
+      properties: {
+        token: { type: 'string' },
+        roles: { type: 'array', items: { type: 'string' } },
+      },
+    });
+    expect(out).toEqual(example);
+    expect(out).not.toBe(example);
+    expect(out.roles).not.toBe(example.roles);
+  });
+
+  it('uses property-level examples when the parent object has no example', () => {
+    const value = generateFake({
+      type: 'object',
+      properties: {
+        type: { type: 'string', example: 'DESKTOP' },
+        ip: { type: 'string', example: '10.0.0.1' },
+        port: { type: 'integer', example: 443 },
+      },
+    });
+    expect(value).toEqual({ type: 'DESKTOP', ip: '10.0.0.1', port: 443 });
+  });
+
+  it('ignores examples when useExamples is false (seed CRUD path produces variation)', () => {
+    const values = new Set();
+    for (let i = 0; i < 30; i++) {
+      const value = generateFake(
+        { type: 'string', example: 'fixed' },
+        { useExamples: false }
+      );
+      values.add(value);
+    }
+    expect(values.has('fixed')).toBe(false);
+    expect(values.size).toBeGreaterThan(1);
   });
 
   it('returns null for unknown type', () => {

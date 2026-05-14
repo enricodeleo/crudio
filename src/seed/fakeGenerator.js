@@ -1,9 +1,13 @@
 import { faker } from '@faker-js/faker';
 
-export function generateFake(schema, isRequired = true, ctx = null) {
+export function generateFake(schema, options = {}) {
   if (!schema) return null;
 
-  if (!isRequired && Math.random() < 0.5) return undefined;
+  const { ctx = null, useExamples = true } = options;
+
+  if (useExamples && schema.example !== undefined) {
+    return structuredClone(schema.example);
+  }
 
   if (schema.enum) {
     return faker.helpers.arrayElement(schema.enum);
@@ -19,9 +23,9 @@ export function generateFake(schema, isRequired = true, ctx = null) {
     case 'boolean':
       return faker.datatype.boolean();
     case 'array':
-      return generateFakeArray(schema, ctx);
+      return generateFakeArray(schema, ctx, useExamples);
     case 'object':
-      return generateFakeObject(schema, ctx);
+      return generateFakeObject(schema, ctx, useExamples);
     default:
       return null;
   }
@@ -35,19 +39,18 @@ function generateFakeString(schema) {
   return faker.lorem.word();
 }
 
-function generateFakeArray(schema, ctx) {
-  const count = faker.number.int({ min: 1, max: 3 });
+function generateFakeArray(schema, ctx, useExamples) {
+  const count = useExamples ? 1 : faker.number.int({ min: 1, max: 3 });
   const items = [];
   for (let i = 0; i < count; i++) {
-    const value = generateFake(schema.items, true, ctx);
+    const value = generateFake(schema.items, { ctx, useExamples });
     if (value !== null) items.push(value);
   }
   return items;
 }
 
-function generateFakeObject(schema, ctx) {
+function generateFakeObject(schema, ctx, useExamples) {
   const obj = {};
-  const required = schema.required ?? [];
 
   for (const [key, propSchema] of Object.entries(schema.properties ?? {})) {
     if (ctx?.resolveFK) {
@@ -63,8 +66,7 @@ function generateFakeObject(schema, ctx) {
       }
     }
 
-    const isReq = required.includes(key);
-    const value = generateFake(propSchema, isReq, ctx);
+    const value = generateFake(propSchema, { ctx, useExamples });
     if (value !== undefined) obj[key] = value;
   }
 

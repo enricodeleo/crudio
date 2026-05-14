@@ -246,4 +246,66 @@ describe('inferResources', () => {
 
     expect(() => inferResources(compile(spec))).toThrow(/Resource name collision.*"a-b"/);
   });
+
+  it('extracts the item schema from a paginated wrapper when GET item is missing', () => {
+    const spec = {
+      openapi: '3.0.3',
+      info: { title: 'Test', version: '1.0' },
+      paths: {
+        '/stores': {
+          get: {
+            operationId: 'listStores',
+            responses: {
+              '200': {
+                description: 'paginated list',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        stores: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['id', 'name'],
+                            properties: {
+                              id: { type: 'integer' },
+                              name: { type: 'string' },
+                            },
+                          },
+                        },
+                        totalItems: { type: 'integer' },
+                        currentPage: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        '/stores/{id}': {
+          delete: {
+            operationId: 'deleteStore',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+            responses: { '204': { description: 'deleted' } },
+          },
+        },
+      },
+    };
+
+    const stores = inferResources(compile(spec)).find((r) => r.name === 'stores');
+    expect(stores.schema).toMatchObject({
+      type: 'object',
+      required: ['id', 'name'],
+      properties: {
+        id: { type: 'integer' },
+        name: { type: 'string' },
+      },
+    });
+    // The wrapper fields must NOT leak into the resource schema.
+    expect(stores.schema.properties.totalItems).toBeUndefined();
+    expect(stores.schema.properties.currentPage).toBeUndefined();
+    expect(stores.schema.properties.stores).toBeUndefined();
+  });
 });

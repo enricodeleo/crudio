@@ -72,7 +72,7 @@ export function topoSort(resources, graph) {
 
 export async function seedResource(engine, schema, count, ctx = null) {
   for (let i = 0; i < count; i++) {
-    const fakeData = generateFake(schema, true, ctx);
+    const fakeData = generateFake(schema, { ctx, useExamples: false });
     if (fakeData) {
       const { id: _discardedId, ...data } = fakeData;
       await engine.create(data);
@@ -124,7 +124,7 @@ export async function seedAll(resources, engines, globalSeed, resourceConfig = {
       resolveFK: (propName, propSchema) => resolveFK(propName, propSchema, names, foreignKeys),
     };
     for (let i = 0; i < count; i++) {
-      const fakeData = generateFake(resource.schema, true, ctx);
+      const fakeData = generateFake(resource.schema, { ctx, useExamples: false });
       if (!fakeData) continue;
       const { id: _discardedId, ...data } = fakeData;
       const created = await engine.create(data);

@@ -1,26 +1,34 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import { sanitizeForAjv } from '../openapi/sanitizeForAjv.js';
 import { ValidationError } from './errors.js';
 
 function createAjv() {
   const ajv = new Ajv({ allErrors: true, strict: false });
   addFormats(ajv);
+  if (!ajv.getKeyword('example')) {
+    ajv.addKeyword({ keyword: 'example' });
+  }
+  if (!ajv.getKeyword('discriminator')) {
+    ajv.addKeyword({ keyword: 'discriminator' });
+  }
   return ajv;
 }
 
 export function createValidators(schema) {
   const ajv = createAjv();
+  const safeSchema = sanitizeForAjv(schema);
 
-  const bodyValidator = ajv.compile(schema);
+  const bodyValidator = ajv.compile(safeSchema);
 
   const createSchema = {
-    ...schema,
-    required: (schema.required ?? []).filter((r) => r !== 'id'),
+    ...safeSchema,
+    required: (safeSchema.required ?? []).filter((r) => r !== 'id'),
   };
   const createValidator = ajv.compile(createSchema);
 
   const patchSchema = {
-    ...schema,
+    ...safeSchema,
     required: [],
   };
   const patchValidator = ajv.compile(patchSchema);
@@ -99,7 +107,7 @@ export function createOperationResponseValidator(operation, mode = 'warn') {
   }
 
   const ajv = createAjv();
-  const validate = ajv.compile(schema);
+  const validate = ajv.compile(sanitizeForAjv(schema));
 
   return (body, status) => {
     if (status !== undefined && status !== canonicalStatus) {

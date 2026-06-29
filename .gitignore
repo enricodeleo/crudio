@@ -5,6 +5,7 @@ test/tmp-engine/
 .claude/
 .wolf/
 .codegraph/
+.omc/
 CLAUDE.md
 AGENTS.md
 docs/superpowers/

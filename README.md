@@ -18,6 +18,8 @@
 
 One command turns any OpenAPI 3.x spec into a running, **stateful** backend — seed it, write to it, and it remembers what you did:
 
+![Crudio demo](examples/demo.gif)
+
 ```console
 $ npx @enricodeleo/crudio ./openapi.yaml --seed 3
 Crudio running on port 3000
@@ -35,13 +37,12 @@ $ curl -s -XPOST localhost:3000/pets -H content-type:application/json -d '{"tag"
 {"error":"Validation failed"}                 # rejected — `name` is required by your schema
 ```
 
-<!-- A recorded session lives at examples/demo.cast (regenerate: `node examples/make-cast.mjs`).
-     For a clickable player badge:  `asciinema upload examples/demo.cast`
-       -> set ASCIINEMA_ID and uncomment:
-       [![Watch the demo](https://asciinema.org/a/ASCIINEMA_ID.svg)](https://asciinema.org/a/ASCIINEMA_ID)
-     For an inline autoplaying GIF (renders directly on GitHub):
-       `agg examples/demo.cast examples/demo.gif` then commit it and uncomment:
-       ![Crudio demo](examples/demo.gif) -->
+<!-- The GIF above is rendered from examples/demo.cast. To regenerate:
+       node examples/make-cast.mjs                       # re-record the session
+       agg examples/demo.cast examples/demo.gif          # render the GIF
+     For a clickable asciinema player badge instead:  asciinema upload examples/demo.cast
+       -> set ASCIINEMA_ID and use:
+       [![Watch the demo](https://asciinema.org/a/ASCIINEMA_ID.svg)](https://asciinema.org/a/ASCIINEMA_ID) -->
 
 ## What is Crudio?
 

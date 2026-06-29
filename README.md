@@ -182,6 +182,9 @@ Custom handlers work on both CRUD and non-CRUD routes. CRUD request validation s
 - Fake data seeding for CRUD resources
 - explicit default and per-scope seeding for non-CRUD operations
 - auto-fake fallback from response schema for non-CRUD operations (opt-out via `responseFake: 'off'`)
+- example-aware fake generation: schema `example` values are returned verbatim, `enum` and string `format` (`email`, `uuid`, `date-time`, …) are enforced
+- response shapes follow the spec (array vs object wrapper); paginated `{items, total}`-style wrappers are auto-built from any object response schema
+- tolerant of common spec imperfections (orphan `nullable` inside `oneOf` is sanitized before AJV compile)
 - Programmatic usage as a Node.js library
 
 ### Not supported (v1)

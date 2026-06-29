@@ -40,6 +40,7 @@ crudio/
 │   │   ├── compileOperations.js # Normalized method + path compilation
 │   │   ├── inferResources.js  # CRUD resource inference from operations
 │   │   ├── extractResponseSchema.js # Canonical 2xx response schema extraction + normalization
+│   │   ├── sanitizeForAjv.js  # Strips orphan `nullable` (no `type`) before AJV compile
 │   │   ├── schemaResolver.js  # Schema normalization (allOf, rejects oneOf)
 │   ├── engine/
 │   │   ├── crudEngine.js      # Pure CRUD logic (no HTTP)
@@ -53,6 +54,7 @@ crudio/
 │   │   ├── resolveRuleRef.js   # Declarative ref resolver with found/not-found sentinel
 │   │   ├── evaluateRulePredicate.js # eq / exists / in predicate evaluator
 │   │   ├── executeDeclarativeRuleSet.js # Declarative rules executor with deferred commit
+│   │   ├── buildListResponseBody.js # Adapts {items,total} to the documented response schema (array vs object wrapper)
 │   │   ├── executeCrudOperation.js # Descriptor-based CRUD executor
 │   │   ├── executeOperationStateOperation.js # Descriptor-based operation-state executor
 │   │   ├── createCustomHandlerAdapter.js # Unified custom-handler wrapper

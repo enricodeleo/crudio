@@ -15,6 +15,14 @@ Any route can also be controlled by declarative rules or wrapped/replaced by a c
 
 When the spec exposes a collection/item pair like `/pets` and `/pets/{id}`, Crudio derives a shared resource and wires whichever CRUD methods are present.
 
+The resource schema is taken, in priority order, from:
+
+1. `GET /resources/{id}` response schema (the canonical "one item" view)
+2. `GET /resources` response schema — and if that is an object wrapper like `{ items: [...Item], total, page }`, Crudio extracts the **first array property** and uses its `items` as the resource schema
+3. `POST /resources` request body schema
+
+This means paginated wrappers do not pollute the resource shape with fields like `total` or `page` even when the item-level `GET` is missing.
+
 | Method | Path | Operation | Success | Error |
 |--------|------|-----------|---------|-------|
 | `GET` | `/resources` | List all | `200` | — |
@@ -51,6 +59,8 @@ Default state for an operation comes from one of three sources, in priority orde
 3. otherwise: no default state, which makes `GET` return `404` and `POST`/`PUT` echo `req.body` merged with path params
 
 When the default state was produced by the response-fake fallback, `POST` and `PUT` return its body **unchanged** (no merge with `req.body`) so that the response shape matches the documented schema rather than the input shape. Array-bodied defaults are likewise returned unchanged across `POST`, `PUT`, and `PATCH`. See [Response Fake Fallback](configuration.md#response-fake-fallback) for the full rules and the `responseFake: 'off'` opt-out.
+
+The generated body is contract-driven: schema `example`s (root, property, items) are returned verbatim, `enum` values are picked from the declared set, string `format`s (`email`, `uuid`, `date-time`, …) produce realistic values, every property is populated (not only `required`), and array responses default to a single deterministic item.
 
 When an operation descends from a CRUD resource item path and its response schema is a compatible subset, `mode: 'auto'` or `mode: 'resource-aware'` can also project overlapping fields back into the parent resource item. Projection-eligible operations are exempted from the response-fake fallback so that the projection flow keeps persisting the caller's input.
 
@@ -160,7 +170,9 @@ Request bodies are validated against OpenAPI schemas using AJV.
 | Operation-state routes | No request validator yet beyond Express JSON parsing |
 | Custom handlers on CRUD routes | Same built-in CRUD request validation before the handler runs |
 
-Response validation is also available for declarative rules, custom handlers, and built-in routes through `validateResponses`.
+Response validation is also available for declarative rules, custom handlers, and built-in routes through `validateResponses`. Validation runs only when the descriptor `status` matches the canonical 2xx of the operation — error bodies (`404`, `500`, …) are not validated against the success schema. AJV is configured with `ajv-formats`, so `email`, `uuid`, `date-time`, `uri`, and the other standard OpenAPI string formats are enforced rather than silently ignored.
+
+Crudio also tolerates a common imperfection in generated OpenAPI 3.0 specs: a `nullable: true` keyword on a node that lacks a `type` (typically inside `oneOf`). A pre-compile sanitizer drops the orphan `nullable` so AJV can still compile the rest of the schema instead of failing the entire boot.
 
 ## Declarative Rules Contract
 

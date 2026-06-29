@@ -289,6 +289,20 @@ Set `responseFake: 'off'` either top-level or per-operation to keep the legacy b
 
 Explicit `seed.default` or `seed.scopes` always wins — auto-fake never overrides an opinion the developer expressed in config.
 
+### How the fake body is built
+
+The response-fake fallback walks the documented schema and applies, in priority order:
+
+1. **`example` wins.** Wherever the schema declares an `example` — at the root, on a property, on `items`, on a nested object — that value is returned verbatim (deep-cloned). This makes the mock byte-identical to the documentation when the swagger author provided one.
+2. **Enums:** `enum` values are picked at random.
+3. **String `format`:** `email`, `uuid`, `date-time`, `uri`, … produce realistic values via `ajv-formats`-compatible generators.
+4. **All properties present.** Every property declared in the schema is populated, even when not in `required`. Drop-in mocks should return the full documented shape — partial responses break frontends that expect every field.
+5. **Arrays default to one item.** When the schema is `type: array` and no `example` is set, Crudio generates a single deterministic item from the `items` schema, not a random 1–3 length array. CRUD seed (`--seed N`) still produces N distinct items because it uses a different code path that ignores `example` to keep variation.
+
+### Tolerating imperfect specs
+
+The schema sanitizer that runs before AJV strips `nullable: true` from nodes that lack a `type` (a pattern many OpenAPI 3.0 generators emit inside `oneOf`). The fallback also skips operations whose response schema is empty or unusable, leaving the legacy echo behavior in place for those.
+
 ## Seeding
 
 CRUD resources use schema-driven fake generation. Non-CRUD operations get default state from either explicit response-shaped seed data or — when `responseFake` is `'auto'` — the response-fake fallback described above.

@@ -19,7 +19,7 @@
 One command turns any OpenAPI 3.x spec into a running, **stateful** backend — seed it, write to it, and it remembers what you did:
 
 ```console
-$ npx crudio ./openapi.yaml --seed 3
+$ npx @enricodeleo/crudio ./openapi.yaml --seed 3
 Crudio running on port 3000
 
 $ curl -s localhost:3000/pets                 # 3 seeded records — schema-shaped, real IDs
@@ -65,14 +65,16 @@ Put differently: **Prism gives you spec-driven mocks, but they're stateless. jso
 
 ```bash
 # Run against any OpenAPI 3.x spec
-npx crudio ./openapi.yaml
+npx @enricodeleo/crudio ./openapi.yaml
 
 # With fake data
-npx crudio ./openapi.yaml --seed 10
+npx @enricodeleo/crudio ./openapi.yaml --seed 10
 
 # Custom port and storage
-npx crudio ./openapi.yaml --port 8080 --data-dir /tmp/data
+npx @enricodeleo/crudio ./openapi.yaml --port 8080 --data-dir /tmp/data
 ```
+
+> **Tip:** install once with `npm i -g @enricodeleo/crudio` and the command shortens to `crudio ./openapi.yaml`.
 
 Given a standard CRUD spec with paths like `/pets` and `/pets/{petId}`, you get:
 

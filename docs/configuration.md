@@ -7,7 +7,7 @@ Crudio works without a config file against any valid OpenAPI 3.x spec. The confi
 ## CLI Flags
 
 ```bash
-npx crudio ./openapi.yaml --port 8080 --seed 10
+npx @enricodeleo/crudio ./openapi.yaml --port 8080 --seed 10
 ```
 
 | Flag | Default | Description |
@@ -115,7 +115,7 @@ export default {
 ```
 
 ```bash
-npx crudio ./openapi.yaml --config ./crudio.config.js
+npx @enricodeleo/crudio ./openapi.yaml --config ./crudio.config.js
 ```
 
 Crudio does not extend OpenAPI. Per-operation and per-resource behavior the spec cannot express is configured only in `crudio.config.js`.

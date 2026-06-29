@@ -265,7 +265,7 @@ CRUD resource IDs are determined by the schema type of the item path parameter:
 ## Programmatic Usage
 
 ```js
-import { createApp } from 'crudio';
+import { createApp } from '@enricodeleo/crudio';
 
 const app = await createApp({
   specPath: './openapi.yaml',

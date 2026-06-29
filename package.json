@@ -1,5 +1,5 @@
 {
-  "name": "crudio",
+  "name": "@enricodeleo/crudio",
   "version": "1.1.3",
   "description": "Turn an OpenAPI spec into a working CRUD backend with persistence and seeding",
   "author": "Enrico Deleo",

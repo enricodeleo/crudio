@@ -5,10 +5,39 @@
 </p>
 
 <p align="center">
+  <em>Spec-driven <strong>and</strong> stateful <strong>and</strong> validating — the one cell other mock tools leave empty.</em>
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> · <a href="#how-it-works">How It Works</a> · <a href="#supported--unsupported">Scope</a> · <a href="docs/api.md">Full API Docs</a> · <a href="docs/configuration.md">Configuration</a>
 </p>
 
 ---
+
+## Demo
+
+One command turns any OpenAPI 3.x spec into a running, **stateful** backend — seed it, write to it, and it remembers what you did:
+
+```console
+$ npx crudio ./openapi.yaml --seed 3
+Crudio running on port 3000
+
+$ curl -s localhost:3000/pets                 # 3 seeded records — schema-shaped, real IDs
+[{"name":"ea","tag":"dog","id":1},{"name":"accommodo","tag":"cat","id":2},{"name":"tui","tag":"bird","id":3}]
+
+$ curl -s -XPOST localhost:3000/pets -H content-type:application/json -d '{"name":"Rex","tag":"dog"}'
+{"name":"Rex","tag":"dog","id":4}             # persisted — next id, written to disk
+
+$ curl -s localhost:3000/pets/4               # still there on the next request
+{"name":"Rex","tag":"dog","id":4}
+
+$ curl -s -XPOST localhost:3000/pets -H content-type:application/json -d '{"tag":"dog"}'
+{"error":"Validation failed"}                 # rejected — `name` is required by your schema
+```
+
+<!-- TODO(launch): swap the block above for an asciinema embed for a stronger visual:
+       [![asciicast](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX)
+     Record it with:  bash examples/demo.sh   (then upload the generated .cast) -->
 
 ## What is Crudio?
 

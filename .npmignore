@@ -1,0 +1,2 @@
+# Keep the published package lean — docs live on GitHub/npmjs, not in node_modules.
+docs/

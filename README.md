@@ -16,7 +16,7 @@ Crudio reads an OpenAPI 3.x specification and spins up a working mock API with p
 
 ## Why
 
-Mock servers return canned responses. That's fine for smoke tests, but not enough when you need to verify that your frontend actually handles pagination, validation errors, 404s, and partial updates correctly.
+Stateless mock servers return canned responses. That's fine for smoke tests, but not enough when you need to verify that your frontend actually handles pagination, validation errors, 404s, and partial updates correctly.
 
 Crudio gives you a backend that behaves like a real one — because it derives everything from your API contract:
 

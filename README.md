@@ -26,6 +26,8 @@ Crudio gives you a backend that behaves like a real one — because it derives e
 - CRUD routes use shared resource state
 - non-CRUD routes use persisted operation state
 
+Put differently: **Prism gives you spec-driven mocks, but they're stateless. json-server gives you stateful CRUD, but it isn't spec-driven and skips validation. Crudio is both** — a backend generated entirely from your OpenAPI contract that actually remembers what you did to it.
+
 **Use it for:** integration testing, frontend development, API prototyping, contract verification.
 
 **Don't use it for:** production backends, load testing, or anything that needs domain-specific business logic without custom handlers.
@@ -96,6 +98,22 @@ curl -X POST http://localhost:3000/pets \
 CRUD-shaped operations share resource state. Everything else is served as operation-state: the response body is persisted per operation scope and replayed on later reads, with optional projection into a parent resource when the response schema is a compatible subset.
 
 For non-CRUD operations without an explicit seed, Crudio generates a fake payload from the documented response schema at boot and serves it on the first call (then stays consistent per scope). Set `responseFake: 'off'` to restore the legacy echo-input behavior — see [Configuration](docs/configuration.md#response-fake-fallback) for the full rules.
+
+## How Crudio Compares
+
+There are great mock servers out there. Most sit on one side of a tradeoff: they're either spec-driven *or* stateful, rarely both, and rarely with validation thrown in for free.
+
+| | From OpenAPI spec | Stateful CRUD | Request validation | Setup |
+| --- | --- | --- | --- | --- |
+| **Crudio** | ✅ | ✅ persists to disk | ✅ from schema | one command |
+| Prism | ✅ | ❌ stateless by design | ✅ | one command |
+| json-server | ❌ uses a `db.json` | ✅ persists to disk | ❌ | needs a data file |
+| Mockoon | ⚠️ import only\* | ✅ in-memory, resets on restart | ❌ | manual CRUD wiring |
+| WireMock | ❌ | ✅ via scenarios | partial | manual stubs |
+
+<sub>\* Mockoon's OpenAPI import generates **stateless** routes; turning them into stateful CRUD is a manual conversion step.</sub>
+
+The cell no other tool fills: **point Crudio at a spec and get a stateful, validating backend with zero manual wiring.** If you only need canned responses, Prism is lighter. If you don't have a spec, json-server is simpler. If you live in a GUI, Mockoon is nicer. Crudio is for when your contract *is* the source of truth and you want it to behave like the real thing.
 
 ## Declarative Rules
 
@@ -210,6 +228,7 @@ Usage: crudio <spec-file> [options]
 
 - [API Reference](docs/api.md) — endpoints, status codes, validation, query params, ID generation
 - [Configuration](docs/configuration.md) — config file, resource/operation overrides, seeding options
+- [FAQ](docs/faq.md) — how Crudio compares to Prism, json-server, Mockoon, and WireMock
 - [Development](docs/development.md) — project structure, running tests, architecture
 
 ## Ecosystem

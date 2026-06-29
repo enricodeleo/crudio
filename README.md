@@ -35,9 +35,13 @@ $ curl -s -XPOST localhost:3000/pets -H content-type:application/json -d '{"tag"
 {"error":"Validation failed"}                 # rejected — `name` is required by your schema
 ```
 
-<!-- TODO(launch): swap the block above for an asciinema embed for a stronger visual:
-       [![asciicast](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX)
-     Record it with:  bash examples/demo.sh   (then upload the generated .cast) -->
+<!-- A recorded session lives at examples/demo.cast (regenerate: `node examples/make-cast.mjs`).
+     For a clickable player badge:  `asciinema upload examples/demo.cast`
+       -> set ASCIINEMA_ID and uncomment:
+       [![Watch the demo](https://asciinema.org/a/ASCIINEMA_ID.svg)](https://asciinema.org/a/ASCIINEMA_ID)
+     For an inline autoplaying GIF (renders directly on GitHub):
+       `agg examples/demo.cast examples/demo.gif` then commit it and uncomment:
+       ![Crudio demo](examples/demo.gif) -->
 
 ## What is Crudio?
 
